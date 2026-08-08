@@ -1,2 +1,2 @@
 # Digital-vs-embedded
-A study guide for digitak=l vs embbeded electronics domain
+A study guide for digital vs embbeded electronics domain

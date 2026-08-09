@@ -232,12 +232,11 @@
       <a href="#sec2"><span class="n">02</span> Digital VLSI &amp; Silicon</a>
       <a href="#sec3"><span class="n">03</span> Embedded &amp; ARM Cortex</a>
       <a href="#sec4"><span class="n">04</span> Comm. Protocols</a>
-      <div class="group-label">Coming next</div>
-      <a class="pending"><span class="n">05</span> RTOS &amp; System Software</a>
-      <a class="pending"><span class="n">06</span> Edge AI &amp; TinyML</a>
-      <a class="pending"><span class="n">07</span> Toolchains &amp; Debugging</a>
-      <a class="pending"><span class="n">08</span> Career Architecture</a>
-      <a class="pending"><span class="n">09</span> 4-Year Roadmap</a>
+      <a href="#sec5"><span class="n">05</span> RTOS &amp; System Software</a>
+      <a href="#sec6"><span class="n">06</span> Edge AI &amp; TinyML</a>
+      <a href="#sec7"><span class="n">07</span> Toolchains &amp; Debugging</a>
+      <a href="#sec8"><span class="n">08</span> Career Architecture</a>
+      <a href="#sec9"><span class="n">09</span> 4-Year Roadmap</a>
     </nav>
   </aside>
 
@@ -252,11 +251,11 @@
         <div class="node done">2 · VLSI</div>
         <div class="node done">3 · Embedded</div>
         <div class="node done">4 · Protocols</div>
-        <div class="node">5 · RTOS</div>
-        <div class="node">6 · Edge AI</div>
-        <div class="node">7 · Tools</div>
-        <div class="node">8 · Careers</div>
-        <div class="node">9 · Roadmap</div>
+        <div class="node done">5 · RTOS</div>
+        <div class="node done">6 · Edge AI</div>
+        <div class="node done">7 · Tools</div>
+        <div class="node done">8 · Careers</div>
+        <div class="node done">9 · Roadmap</div>
       </div>
     </div>
 
@@ -912,13 +911,343 @@ int main(void) {
         <tr><td>CAN</td><td>2 (+GND)</td><td>Half</td><td>~1 Mbps (Classic)</td><td>Message-ID based</td><td>15-bit CRC + bit-stuffing (strongest)</td></tr>
       </table>
 
-      <div class="nextlink">Say <strong>"next"</strong> to continue to Section 5: Real-Time Operating Systems (RTOS) — task states, context switching, mutexes/semaphores, priority inversion, and embedded Linux fundamentals.</div>
+    </section>
+
+    <section class="chapter" id="sec5">
+      <h2>5 · Real-Time Operating Systems (RTOS) &amp; System Software</h2>
+
+      <p>Everything in Section 3 was <strong>bare-metal</strong> — one <code>main()</code>, one <code>while(1)</code> loop, and interrupts. That's fine for a single LED. The moment a real product needs to juggle many independent responsibilities at once — reading a sensor every 10ms, running a control loop every 5ms, handling Bluetooth packets whenever they arrive, updating a display every 100ms — writing all of that by hand inside one giant loop becomes unmanageable. An <strong>RTOS</strong> is a small, extremely lightweight piece of software that gives you the illusion of many independent programs ("tasks") running at once, even on a single CPU core.</p>
+
+      <h3>5.1 RTOS Core Concepts</h3>
+
+      <p><strong>Determinism vs Latency</strong> — the reason RTOS exists as its own category. A general-purpose OS (Windows, desktop Linux) optimizes for <em>average</em> throughput — fine if a task occasionally waits an extra 200ms. An RTOS optimizes for <strong>worst-case, guaranteed response time</strong> — if a control loop needs to run within 2ms of a sensor interrupt, the scheduler must <em>guarantee</em> that bound, every single time. This guarantee is <strong>determinism</strong>, and it's what "real-time" actually means — not "fast," but "predictable, bounded, and never missing a deadline."</p>
+
+      <h4>Task States — the life cycle every RTOS task moves through</h4>
+      <pre><code>                     ┌──────────┐
+        created ───► │  READY   │ ◄────────────┐
+                     └────┬─────┘               │
+                          │ scheduler picks      │ higher-priority
+                          │ this task to run     │ task preempts,
+                          ▼                      │ OR task's time
+                     ┌──────────┐                │ slice ends
+                     │ RUNNING  │────────────────┘
+                     └────┬─────┘
+                          │ task blocks on a
+                          │ semaphore, delay,
+                          │ or queue-wait
+                          ▼
+                     ┌──────────┐   event/timeout
+                     │ BLOCKED  │───────────────► back to READY
+                     └──────────┘</code></pre>
+
+      <ul>
+        <li><strong>READY</strong>: eligible to run, waiting for the scheduler's turn.</li>
+        <li><strong>RUNNING</strong>: actually executing on the CPU right now (only one task per core in this state).</li>
+        <li><strong>BLOCKED</strong>: waiting on something — a timer delay, a semaphore, incoming queue data — and not competing for CPU time until that event occurs.</li>
+      </ul>
+
+      <p><strong>Context Switching</strong> — the mechanical trick that makes "multiple tasks on one CPU" possible. When the scheduler switches from Task A to Task B, it saves <em>every</em> CPU register Task A was using (including the Program Counter) onto Task A's private stack, then loads Task B's previously-saved registers from Task B's stack into the CPU. This is exactly why Section 3.1's <strong>PSP</strong> matters — each task gets its own private stack, and the RTOS just repoints PSP at a different task's stack to "switch." This save/restore takes a small, bounded number of cycles — RTOS designers work hard to keep this overhead small and predictable, since it can happen thousands of times per second.</p>
+
+      <h3>5.2 Synchronization Primitives</h3>
+
+      <p>The moment you have multiple tasks, you get a new bug category that doesn't exist in single-threaded bare-metal code: two tasks touching the same shared resource at the same time, in unpredictable order.</p>
+
+      <p><strong>Race Condition</strong> — the core danger. Two tasks both doing <code>counter++</code> on a shared variable: that single line is actually 3 CPU instructions — read, increment, write. If Task A is interrupted by Task B exactly between the read and write, Task B's entire increment can be silently lost. Worse, this bug is <strong>non-deterministic</strong> — it might not show up for millions of iterations, then appear once under specific timing, making it one of the hardest bug classes to reproduce.</p>
+
+      <p><strong>Mutex (Mutual Exclusion lock)</strong> — solves this by ensuring only one task can hold the "lock" on a shared resource at a time. A task calls <code>mutex_lock()</code> before touching the resource and <code>mutex_unlock()</code> after; another task trying to lock an already-locked mutex simply <strong>blocks</strong> until release. A mutex has <strong>ownership</strong> — only the locking task can unlock it, which is what enables priority inheritance below.</p>
+
+      <p><strong>Binary vs Counting Semaphores</strong> — semaphores solve <strong>signaling</strong> between tasks (or an ISR and a task), not protecting shared data.</p>
+      <ul>
+        <li><strong>Binary semaphore</strong>: a simple 0/1 flag. Classic use: an ISR "gives" it the instant a hardware event occurs (e.g. a UART byte fully received), and a task "taking" (blocked on) it wakes instantly to process — far more efficient than polling a status register in a loop.</li>
+        <li><strong>Counting semaphore</strong>: like a binary semaphore but can exceed 1, acting as a resource counter (e.g. managing a pool of 4 DMA channels) — each take decrements, each give increments, and a task blocks only once the count hits zero.</li>
+      </ul>
+
+      <p><strong>A critical subtlety:</strong> unlike a mutex, a semaphore has <strong>no ownership</strong> — any task or ISR can "give" it, even one that never "took" it. This is exactly why semaphores are right for ISR-to-task signaling (an ISR should never use a mutex — mutex blocking logic is unsafe in interrupt context) while mutexes are right for protecting shared data between tasks.</p>
+
+      <p><strong>Queues</strong> — the RTOS's built-in mechanism for safely passing actual <em>data</em> (not just a signal) between tasks, or from an ISR into a task. A fixed-size, RTOS-managed FIFO; <code>queue_send()</code> copies data in, <code>queue_receive()</code> copies data out, and the RTOS handles all internal locking so you never manually protect the queue's state.</p>
+
+      <div class="note"><strong>Priority Inversion</strong> — the classic RTOS scheduling nightmare. Three tasks: Low, Medium, High priority. Low locks a mutex for a shared resource. High becomes ready and wants that same mutex, so it blocks on Low. Expected so far — but now Medium, which needs no shared resource at all, becomes ready. Since Medium outranks Low, the scheduler runs Medium instead of Low. Low never finishes to unlock the mutex, so High — the highest-priority task in the whole system — sits stuck behind a lower-priority task. This nearly doomed NASA's 1997 Mars Pathfinder mission (repeated watchdog resets, diagnosed and fixed remotely after landing).</div>
+
+      <p><strong>Priority Inheritance — the standard fix.</strong> When a high-priority task blocks waiting for a mutex held by a lower-priority task, the RTOS temporarily boosts the lower-priority holder's priority up to match the waiting task — for exactly as long as it holds the mutex. This guarantees the holder can't be starved out by a medium-priority task in between, finishes quickly, and releases the mutex to the genuinely higher-priority task as fast as possible. Most production RTOSes (FreeRTOS, Zephyr, ThreadX) implement priority-inheritance mutexes as the default type specifically because of this failure mode.</p>
+
+      <h3>5.3 Embedded Linux Fundamentals</h3>
+
+      <p>For products with more computing demands than a microcontroller-class RTOS can comfortably handle — a camera feed, a full network stack, a graphical touchscreen UI — <strong>embedded Linux</strong> is the standard choice instead of (or alongside) an RTOS.</p>
+
+      <p><strong>Bootloader (U-Boot)</strong> — the very first software that runs when power is applied, before Linux itself exists in memory. Its job: initialize the bare minimum hardware needed to read the Linux kernel image off storage (SD card, eMMC, SPI flash), load it into RAM, and jump execution into it. U-Boot also commonly provides an interactive serial-console shell for low-level recovery, firmware updates, and hardware bring-up debugging — often the first thing an embedded Linux engineer interacts with on brand-new custom hardware.</p>
+
+      <p><strong>Linux Kernel</strong> — once U-Boot hands off control, the kernel initializes device drivers, memory management, process scheduling, and the filesystem, eventually launching the first user-space process (traditionally <code>init</code>, often <code>systemd</code> on modern embedded distributions).</p>
+
+      <p><strong>Device Trees (.dts)</strong> — one of embedded Linux's most distinctive concepts. Unlike a desktop PC (which can dynamically discover most hardware via PCI/USB), an embedded board's layout — which I2C devices sit on which bus, which GPIO drives which chip-select, a sensor's interrupt line — is fixed and can't be auto-discovered. The <strong>Device Tree Source (.dts)</strong> is a plain-text description of the exact hardware layout, compiled into a binary <strong>Device Tree Blob (.dtb)</strong> loaded alongside the kernel at boot. This lets the <em>same</em> generic kernel binary support many different boards — only the <code>.dtb</code> changes, not the kernel.</p>
+
+      <pre><code>// A tiny illustrative device tree fragment — declaring an I2C temperature
+// sensor at address 0x48 on I2C bus 1
+&amp;i2c1 {
+    status = "okay";
+    temp_sensor@48 {
+        compatible = "ti,tmp102";
+        reg = &lt;0x48&gt;;             // the I2C address
+        interrupt-parent = &lt;&amp;gpio1&gt;;
+        interrupts = &lt;5 IRQ_TYPE_EDGE_FALLING&gt;;  // which GPIO pin, which edge
+    };
+};</code></pre>
+
+      <p><strong>User Space vs Kernel Space</strong> — the fundamental security/stability boundary in any Linux system. <strong>Kernel space</strong> is where the OS core, drivers, and memory manager run, with full unrestricted hardware access. <strong>User space</strong> is where ordinary applications run, sandboxed with no direct hardware access — an application wanting to read a sensor must go through a <strong>system call</strong> into the kernel, which validates and performs the access on its behalf. This boundary is why a buggy user-space application can crash itself without taking down the whole device, while a bug in kernel-space code (a faulty driver) can crash or corrupt the entire system — exactly why driver code is held to a much higher standard of scrutiny than typical application code.</p>
+
+    </section>
+
+    <section class="chapter" id="sec6">
+      <h2>6 · Deep Learning on Hardware: Edge AI &amp; TinyML</h2>
+
+      <p>This is the section where Sections 2 (silicon) and 3 (embedded) explicitly collide. <strong>TinyML</strong> is the discipline of running actual neural network inference — the same math that powers image recognition and voice assistants — directly on a microcontroller with kilobytes of RAM, no OS, no internet. <strong>Edge AI</strong> hardware is silicon purpose-built (in VLSI) to make that math fast and power-efficient. If Section 2's Verilog and Section 3's bare-metal C both genuinely interested you, this section is a strong signal of where the two domains are heading together.</p>
+
+      <h3>6.1 Neural Networks on Microcontrollers: Quantization &amp; Memory Footprint</h3>
+
+      <p>A neural network trained on a GPU almost always uses <strong>FP32</strong> (Section 1.4) for every weight and calculation, since training benefits from that precision and GPUs have dedicated FP32/FP16 hardware. A typical microcontroller has <strong>no FPU at all</strong>, or at best a modest single-precision FPU — running FP32 math in software emulation on a Cortex-M0 is extremely slow, and even chips with an FPU pay a real cost in silicon area, power, and memory bandwidth for every 32-bit value moved.</p>
+
+      <p><strong>Quantization — FP32 → INT8.</strong> Instead of storing each weight as a 32-bit float, quantization maps the range of values a weight takes (say -2.0 to +2.0) onto the 256 discrete values an 8-bit integer can represent, via a simple linear formula:</p>
+      <p>\[ \text{real\_value} \approx \text{scale} \times (\text{int8\_value} - \text{zero\_point}) \]</p>
+      <p>Where <code>scale</code> is a per-layer (or per-channel) float constant computed once during quantization, and <code>zero_point</code> is an integer offset. At inference time, the microcontroller does its matrix-multiply and convolution math using cheap, fast <strong>integer</strong> arithmetic (which most Cortex-M cores handle natively, even without an FPU), applying the scale/zero-point conversion only at input/output boundaries.</p>
+
+      <p><strong>Why this matters, in concrete numbers:</strong></p>
+      <ul>
+        <li><strong>4x smaller model size</strong>: INT8 uses 1 byte per weight vs FP32's 4 — critical when your entire chip might have only 256KB–2MB of Flash for the model.</li>
+        <li><strong>Dramatically faster inference</strong>: integer ALU ops are simpler and faster in silicon than floating-point, and INT8 SIMD (where available) can process 4 values per instruction where FP32 processes 1.</li>
+        <li><strong>Lower power draw</strong>: fewer bits moved per operation directly reduces the \(CV^2f\) dynamic power (Section 1.2) of every multiply-accumulate — exactly why quantization is often the <em>only</em> way a model fits a battery-powered device's power budget at all.</li>
+      </ul>
+
+      <p><strong>Memory footprint — the two hard boundaries every TinyML engineer fights:</strong></p>
+      <ul>
+        <li><strong>Flash</strong> must hold the compiled program code and the quantized model weights — often the single biggest constraint on a typical 512KB–2MB MCU.</li>
+        <li><strong>RAM (SRAM)</strong> must hold the "activation" values flowing between layers as the network runs, plus interpreter overhead and your app's normal variables/stack. RAM is almost always far scarcer than Flash (often just 128KB–512KB total), which is why "does peak activation memory fit in RAM" frequently decides whether a network architecture is viable on a chip — long before accuracy is even considered.</li>
+      </ul>
+
+      <h3>6.2 TinyML Execution Flow: From Python to a C++ Array</h3>
+
+      <pre><code>  1. Model Training           Standard PyTorch or TensorFlow training on a
+                               GPU/cloud machine — FP32 weights, full dataset,
+                               normal backpropagation
+       ↓
+  2. Quantization & Pruning   Convert FP32 weights to INT8 (Section 6.1),
+                               AND optionally "prune" — remove neurons/weights
+                               that contribute negligibly to accuracy, shrinking
+                               the model further before it ever touches hardware
+       ↓
+  3. TFLite Micro Conversion   The TensorFlow Lite Converter transforms the
+                               quantized model into a highly compact binary
+                               format specifically designed for microcontrollers
+                               (as opposed to regular TFLite, meant for phones)
+       ↓
+  4. FlatBuffer Compilation    The model is serialized as a FlatBuffer — chosen
+                               specifically because it can be used directly from
+                               Flash memory with ZERO parsing/unpacking step at
+                               runtime (unlike JSON or Protobuf, which need
+                               decoding into RAM first) — critical when RAM is
+                               this scarce
+       ↓
+  5. C++ Array Invocation      A tool (xxd, or TFLite's own converter) turns
+                               the FlatBuffer's raw bytes into a C array
+                               literal, compiled directly into your firmware's
+                               Flash alongside your normal code:
+
+                                 const unsigned char model_data[] = {
+                                     0x1c, 0x00, 0x00, 0x00, 0x54, 0x46, ...
+                                 };
+
+                               The TFLite Micro C++ interpreter then loads this
+                               array and runs inference calls like:
+
+                                 tflite::MicroInterpreter interpreter(
+                                     model, resolver, tensor_arena,
+                                     tensor_arena_size);
+                                 interpreter.Invoke();
+
+                               directly on your ESP32 or Cortex-M chip.</code></pre>
+
+      <p>This flow is exactly what a real Edge AI product ships: train big on the cloud, shrink aggressively, and freeze the final result as literal bytes baked into the firmware binary — there is no "loading a model file" at runtime the way a Python script does; the model <em>is</em> part of the compiled program.</p>
+
+      <h3>6.3 Hardware Accelerators for AI: Custom Matrix Multiplication in Verilog</h3>
+
+      <p>Neural network inference is, at its mathematical core, overwhelmingly dominated by one operation performed millions or billions of times: <strong>multiply-accumulate (MAC)</strong> — <code>result += a × b</code>, repeated across every weight and input in every layer. A general-purpose CPU executes these one (or a handful, with SIMD) at a time, sequentially — exactly the kind of massively repetitive, parallel-friendly workload that custom digital hardware (the VLSI skills from Section 2) can dramatically accelerate by doing thousands of MACs simultaneously, every clock cycle.</p>
+
+      <p><strong>A minimal MAC unit in Verilog</strong> — the fundamental building block of every AI accelerator, from a small FPGA project to a datacenter-scale AI chip:</p>
+      <pre><code>module mac_unit #(parameter WIDTH = 8) (
+    input                      clk,
+    input                      rst_n,
+    input      [WIDTH-1:0]     a,        // e.g. an INT8 weight
+    input      [WIDTH-1:0]     b,        // e.g. an INT8 activation
+    input                      accumulate_en,
+    output reg [2*WIDTH-1:0]   result    // wider to avoid overflow
+);
+    always @(posedge clk) begin
+        if (!rst_n)
+            result &lt;= 0;
+        else if (accumulate_en)
+            result &lt;= result + (a * b);   // the entire "AI accelerator" idea,
+                                            // reduced to its atomic operation
+    end
+endmodule</code></pre>
+
+      <p><strong>Systolic Arrays</strong> — how one MAC unit scales into a real accelerator. A systolic array (used in Google's TPU, among many others) tiles hundreds or thousands of these MAC units into a 2D grid, where data (weights and activations) flows through rhythmically, like blood through a heart ("systolic" is the medical term for that pumping motion) — each cell passes inputs to neighbors on every clock cycle while performing its own MAC, so an entire matrix multiplication that would take a CPU millions of sequential cycles completes in roughly the <em>width</em> of the matrix in cycles, since so much computation happens in parallel across the whole grid.</p>
+
+      <pre><code> Simplified 3x3 Systolic Array data flow (weights pre-loaded, activations flow left-to-right)
+
+   a11 ─►[MAC]─►[MAC]─►[MAC]─►  (partial sums flow right)
+          │       │      │
+   a12 ─►[MAC]─►[MAC]─►[MAC]─►
+          │       │      │
+   a13 ─►[MAC]─►[MAC]─►[MAC]─►
+          │       │      │
+          ▼       ▼      ▼
+       (partial sums accumulate downward too, in a full systolic design)</code></pre>
+
+      <p><strong>FPGA vs ASIC for AI acceleration:</strong></p>
+      <ul>
+        <li><strong>FPGA</strong> (Field-Programmable Gate Array): the same MAC-unit Verilog above can be directly synthesized onto an FPGA's reconfigurable logic — you can prototype and iterate on a custom accelerator design in days, and reprogram the same physical chip for a completely different design later. This is exactly how most student/hobbyist AI-accelerator projects (and a lot of real industry prototyping) actually happen — a Basys 3 or similar board can host small systolic-array experiments today.</li>
+        <li><strong>ASIC</strong> (Application-Specific Integrated Circuit): once a design is proven, going through the full Section 2.4 tape-out flow to fabricate it as a dedicated ASIC yields far higher performance-per-watt (no wasted reconfigurable-routing overhead) at the cost of enormous non-recurring engineering (NRE) expense and total inflexibility after fabrication — exactly what Google's TPU, Apple's Neural Engine, and Tesla's FSD chip all are.</li>
+      </ul>
+
+    </section>
+
+    <section class="chapter" id="sec7">
+      <h2>7 · Industry Toolchains, Hardware Debugging &amp; Testing</h2>
+
+      <p>Knowing the concepts from Sections 1-6 is necessary but not sufficient — every real VLSI or embedded job happens <em>inside</em> a specific set of tools, and fluency with them is often what an interview or a first month on the job actually tests. This section is a practical map of what each tool is <em>for</em>, so you already know where they fit when you meet them for real.</p>
+
+      <h3>7.1 Software &amp; EDA Tools</h3>
+
+      <p><strong>On the VLSI / Digital Design side:</strong></p>
+      <ul>
+        <li><strong>Xilinx (now AMD) Vivado</strong> — the design suite for Xilinx FPGAs, covering the full flow from RTL synthesis through implementation (place &amp; route) to the final bitstream that configures the FPGA. If you get a Basys 3 board (Section 9), Vivado is what gets your Verilog actually running on it.</li>
+        <li><strong>Cadence Virtuoso</strong> — the industry-standard tool for <strong>analog/custom IC layout</strong> — drawing transistors and wires at the physical mask-geometry level, used heavily for analog, RF, and memory design where automated digital synthesis isn't precise enough.</li>
+        <li><strong>Cadence Genus</strong> and <strong>Synopsys Design Compiler</strong> — the two dominant commercial <strong>logic synthesis</strong> tools (Section 2.4's "RTL → gate-level netlist" step) used at essentially every real semiconductor company — the tools "synthesis engineer" job postings refer to.</li>
+        <li><strong>GTKWave</strong> — a free, open-source <strong>waveform viewer</strong>. After simulating Verilog (with a free simulator like Icarus Verilog), GTKWave lets you visually inspect every signal's value over time — how you actually debug a digital design, by literally seeing the Section 1.3 timing diagrams rendered from your own simulation output.</li>
+        <li><strong>EDA Playground</strong> — a free, browser-based Verilog/SystemVerilog simulator requiring zero installation — the fastest way for a student to write and test the FSM and MAC-unit examples from this vault today, with no setup barrier at all.</li>
+        <li><strong>STM32CubeIDE</strong> — ST Microelectronics' free, official IDE for STM32 microcontrollers, bundling an editor, GCC-based compiler, debugger, and a graphical peripheral-configuration tool ("CubeMX") that can auto-generate HAL-based init code — useful for fast prototyping, though Section 3's bare-metal approach deliberately bypasses this generated code to teach the underlying registers directly.</li>
+        <li><strong>Keil uVision (MDK-ARM)</strong> — a long-established commercial IDE and toolchain for ARM Cortex-M development, historically very common in industry, bundling its own compiler, debugger, and simulator.</li>
+      </ul>
+
+      <h3>7.2 Hardware Debugging Tools</h3>
+
+      <p><strong>Logic Analyzer</strong> — captures and displays the digital HIGH/LOW state of many signal lines simultaneously over time, essentially a real, physical version of the ASCII timing diagrams from Sections 1, 3, and 4. This is the <em>primary</em> tool for debugging real communication protocol problems: connect probes to <code>SCLK</code>/<code>MOSI</code>/<code>MISO</code>/<code>CS</code> and directly see whether your SPI mode (Section 4.2) actually matches what the sensor expects, byte by byte, in real time. Affordable USB logic analyzers (Saleae-compatible clones) cost as little as a few hundred rupees and are among the highest-value tools a student can own.</p>
+
+      <p><strong>Digital Storage Oscilloscope (DSO)</strong> — unlike a logic analyzer (HIGH/LOW only), a DSO captures the actual continuous <strong>analog voltage</strong> waveform over time. Essential for problems a logic analyzer can't see: is a signal's rise time too slow from excessive capacitive loading? Is there electrical noise or ringing on a line technically still reading valid HIGH/LOW but close to the threshold and intermittently failing? Is the power rail dipping when a motor switches on? These are voltage-level, analog problems, and only a DSO reveals them.</p>
+
+      <p><strong>JTAG / SWD (Serial Wire Debug)</strong> — physical protocols that let a debugger tool directly control a microcontroller's CPU core: halting at a breakpoint, single-stepping instruction by instruction, reading/writing any register or memory location live, and reflashing Flash memory with new firmware — all without the target chip's own firmware needing any built-in debug support. SWD is ARM's own 2-wire (<code>SWDIO</code> + <code>SWCLK</code>) simplification of the older, more general 4-5 wire JTAG standard, and is what most Cortex-M boards expose today.</p>
+
+      <p><strong>OpenOCD</strong> — free, open-source software bridging a physical JTAG/SWD debug probe (like an ST-Link) connected over USB, and a debugger's software interface — it translates high-level debug commands ("set a breakpoint at address 0x08000120") into the low-level JTAG/SWD electrical protocol sequences the chip actually understands.</p>
+
+      <p><strong>GDB (GNU Debugger)</strong> — the interactive debugger a human uses, connecting to OpenOCD (or similar) as its target. This is where Section 3's abstract register concepts become something you interact with directly and <em>see</em> — a typical embedded debug session:</p>
+
+      <pre><code>(gdb) break TIM2_IRQHandler        # set a breakpoint at our ISR from Section 3.3
+(gdb) continue                     # run the chip until it hits that breakpoint
+(gdb) print/x GPIOA_ODR             # inspect the live GPIO output register value
+(gdb) print led_state               # inspect our own tracked variable
+(gdb) step                          # execute exactly one more C statement
+(gdb) print/x TIM2_SR               # confirm the interrupt flag really did clear</code></pre>
+
+      <p>This is the real, day-to-day workflow of professional embedded firmware debugging: setting a breakpoint at exactly the interrupt handler you wrote in Section 3.3, and inspecting the <em>actual live values</em> in the <em>actual physical registers</em> — a direct, hands-on continuation of everything Section 3 taught conceptually.</p>
+
+    </section>
+
+    <section class="chapter" id="sec8">
+      <h2>8 · Career Architecture &amp; Industry Breakdown (India &amp; Global)</h2>
+
+      <div class="note"><strong>A note on numbers below:</strong> salary figures shift year to year with hiring cycles, company performance, and location — treat every figure here as an approximate, general-knowledge range to calibrate expectations, not a guarantee. Always cross-check against current listings (LinkedIn, Glassdoor, AmbitionBox, Levels.fyi) before making a real decision.</div>
+
+      <h3>8.1 VLSI vs Embedded Career Comparison Matrix</h3>
+      <table>
+        <tr><th></th><th>Digital VLSI</th><th>Embedded Systems</th></tr>
+        <tr><td><strong>Typical entry-level role (India)</strong></td><td>RTL Design Engineer, DV (Design Verification) Engineer, Physical Design Engineer</td><td>Firmware Engineer, Embedded Software Engineer</td></tr>
+        <tr><td><strong>Fresh B.Tech entry pay (broad range)</strong></td><td>Moderate-to-good at strong hubs, wider variance; roles often skew toward candidates with M.Tech or specific VLSI coursework/internships</td><td>Moderate to good, and generally more B.Tech-fresher-friendly given the sheer volume of hiring</td></tr>
+        <tr><td><strong>Salary growth pattern</strong></td><td>Slower initial ramp, but senior specialized roles (STA, P&amp;R, DFT leads) at MNCs can climb very high after 8-10+ years</td><td>Faster initial ramp for generalists; strong growth for engineers moving into systems architecture, RTOS internals, or embedded-Linux/BSP roles</td></tr>
+        <tr><td><strong>Geographic concentration (India)</strong></td><td>Heavily concentrated — Bangalore dominant, meaningful presence in Hyderabad, Noida/NCR, Pune</td><td>Much more distributed — automotive (Pune, Chennai), telecom, consumer electronics, and IoT hiring spans many more cities</td></tr>
+        <tr><td><strong>Entry barrier</strong></td><td>Often higher — many top VLSI teams prefer/require M.Tech (especially physical design/analog); B.Tech entry possible for RTL/DV with strong projects, but competitive</td><td>Lower on average — a strong GitHub portfolio of real embedded/IoT projects can meaningfully substitute for advanced degrees at many companies</td></tr>
+        <tr><td><strong>Job market size</strong></td><td>Smaller absolute number of openings, often narrowly specialized</td><td>Much larger absolute number across many more industries (automotive, consumer electronics, medical devices, industrial, telecom, robotics)</td></tr>
+        <tr><td><strong>Remote-work friendliness</strong></td><td>Lower — physical design and chip bring-up lab work often need on-site presence; verification-only roles somewhat more remote-friendly</td><td>Higher for firmware/software-heavy roles; hardware bring-up and lab debugging still need on-site time</td></tr>
+        <tr><td><strong>Where AI/ML is changing the field</strong></td><td>AI-assisted EDA tools (AI-driven P&amp;R optimization, verification test generation) — an emerging specialization</td><td>TinyML/Edge AI (Section 6) is creating a fast-growing hybrid specialization right at the embedded/AI intersection</td></tr>
+      </table>
+
+      <h3>8.2 Top Hiring Companies</h3>
+
+      <p><strong>Silicon &amp; IP Giants</strong> (VLSI-heavy hiring, India and globally): Nvidia, Qualcomm, Texas Instruments, Intel, AMD, ARM, MediaTek, and STMicroelectronics all run substantial India design centers (concentrated mainly in Bangalore and Hyderabad) doing genuine, complete chip-design work — spanning RTL design, verification, physical design, and analog/mixed-signal design.</p>
+
+      <p><strong>Automotive &amp; Systems OEMs</strong> (heavy embedded hiring, with growing VLSI/silicon investment too): Bosch, Continental, Ather Energy, Tesla, and Siemens all hire large embedded engineering teams — automotive is one of the fastest-growing embedded employers right now, driven by the industry-wide shift toward electric vehicles (battery management systems, motor control) and ADAS (built heavily on the RTOS and communication-protocol concepts from Sections 4-5, especially CAN).</p>
+
+      <p><strong>Other categories worth knowing:</strong> consumer electronics and IoT companies (Samsung R&amp;D, Google, various Indian IoT startups) hire heavily for embedded + connectivity roles; EDA companies themselves (Synopsys, Cadence, Siemens EDA) hire both VLSI-domain engineers <em>and</em> software engineers who build the tools from Section 7; and telecom/networking companies (Nokia, Ericsson, Cisco) hire embedded engineers for modem and networking-hardware firmware.</p>
+
+      <h3>8.3 Interview Preparation Core Topics</h3>
+
+      <p>For <strong>VLSI/Digital Design interviews</strong>, expect deep questioning on exactly the material in Sections 1-2: CMOS logic gate design from transistors, setup/hold timing analysis and how to fix a violating path, Mealy vs Moore FSM design (often live, on a whiteboard), blocking vs non-blocking assignment pitfalls, and pipeline hazard identification on a given instruction sequence. Verification-focused (DV) roles add deep questions on testbench architecture, coverage-driven verification, and SystemVerilog assertions.</p>
+
+      <p>For <strong>Embedded Systems interviews</strong>, expect deep questioning on exactly the material in Sections 3-5: the meaning and correct use of <code>volatile</code>, pointer arithmetic and common pointer bugs, bit-manipulation exercises live on a whiteboard, explaining what happens electrically and in software from power-on to <code>main()</code>, RTOS concepts (task states, priority inversion, mutex vs semaphore — a near-universal interview question), and at least one communication protocol explained at the signal-line level (a startlingly common request: "draw me the I2C start condition").</p>
+
+      <div class="note"><strong>A pattern worth noticing across both:</strong> the deepest, most differentiating interview questions in both fields go back to fundamentals from Sections 1 and 3 — timing analysis and <code>volatile</code>/bit-masking respectively — far more often than they go back to any specific tool or framework. This is exactly why this vault front-loads those fundamentals so heavily: they're the actual, durable interview and career currency in both domains, while specific tools (Section 7) come and go with company preference.</div>
+
+    </section>
+
+    <section class="chapter" id="sec9">
+      <h2>9 · Full B.Tech ECE 4-Year Milestone Roadmap</h2>
+
+      <p>This roadmap is intentionally dual-tracked — every semester lists a <strong>VLSI-leaning project</strong> and an <strong>Embedded-leaning project</strong> of comparable difficulty, so you can keep genuinely exploring both, exactly in the spirit of Section 0, rather than being forced to commit before you've actually built enough to know.</p>
+
+      <h3>Semester-by-Semester Project Matrix</h3>
+      <table>
+        <tr><th>Sem</th><th>Core Focus</th><th>VLSI-Track Project</th><th>Embedded-Track Project</th><th>Hardware to Acquire</th></tr>
+        <tr><td><strong>S1-S2</strong></td><td>Math, Basic Electronics, C foundations</td><td>Simulate basic logic gates from truth tables in a free simulator</td><td>Blink an LED and read a push-button on any dev board available</td><td>(none yet — build programming fundamentals first)</td></tr>
+        <tr><td><strong>S3</strong></td><td>Digital Logic Design, Data Structures</td><td>Build and simulate a 4-bit ALU in Verilog (adders + logic ops + op-select mux)</td><td>Build a bare-metal GPIO driver from scratch (Section 3.3-style) on your ESP32</td><td>ESP32 dev board <em>(already owned)</em>, USB logic analyzer</td></tr>
+        <tr><td><strong>S4</strong></td><td>Computer Organization, Signals &amp; Systems</td><td>Implement and simulate a simplified single-cycle RISC-V datapath in Verilog</td><td>Build a UART driver from register-level scratch (no <code>Serial.print()</code>) and talk to your laptop over a terminal</td><td>—</td></tr>
+        <tr><td><strong>S5</strong></td><td>Microprocessors, VLSI Design fundamentals begin</td><td>Design and simulate a simple FSM-based traffic-light or vending-machine controller (Section 2.2-style)</td><td>Build an I2C sensor driver from scratch, polling first, then upgrade to interrupt-driven</td><td>STM32 Nucleo board (true ARM Cortex-M work, distinct from ESP32's Xtensa/RISC-V)</td></tr>
+        <tr><td><strong>S6</strong></td><td>Embedded Systems coursework, VHDL/Verilog electives</td><td>Get a small design (your ALU or FSM) actually running on a real FPGA, not just simulated</td><td>Port a small project onto FreeRTOS — convert a single-loop program into 2-3 properly synchronized tasks (Section 5.2)</td><td>Basys 3 (or similar) FPGA board</td></tr>
+        <tr><td><strong>S7</strong></td><td>Specialization electives, major project groundwork</td><td>Attempt a small systolic-array MAC accelerator (Section 6.3) on the FPGA — an excellent, genuinely differentiated major-project seed</td><td>Build a complete TinyML pipeline (Section 6.2) — train a tiny model, quantize it, run real inference on your ESP32</td><td>—</td></tr>
+        <tr><td><strong>S8</strong></td><td>Major project, placements/higher-studies prep</td><td>Polish and document your FPGA accelerator project as a portfolio centerpiece, with a testbench and waveform evidence (GTKWave)</td><td>Polish and document a complete embedded product (sensors + RTOS + a comm. protocol + real enclosure/PCB if possible)</td><td>—</td></tr>
+      </table>
+
+      <div class="note"><strong>Reading this table honestly:</strong> you don't need to complete every single row — the goal is that by the end of S5 or S6, you'll have hands-on evidence (not just guesswork) of which track genuinely holds your attention, using exactly the "stay up late for fun" test from Section 0. It's completely normal, and common, to end up doing meaningful work in <em>both</em> by S7-S8 — Section 6 exists precisely because the industry itself increasingly rewards exactly that combination.</div>
+
+      <h3>GitHub Repository Structuring Guidelines</h3>
+
+      <p>A messy, single-giant-repo GitHub profile is one of the most common ways strong student work fails to actually land in interviews — a recruiter skimming your profile in 60 seconds needs to instantly understand what each project <em>is</em> and that it <em>works</em>. A clean structure:</p>
+
+      <pre><code>your-github-username/
+│
+├── verilog-alu-4bit/
+│   ├── README.md              ← what it does, block diagram, how to simulate it
+│   ├── src/                   ← the actual .v / .sv source files
+│   ├── testbench/             ← your testbench files
+│   ├── waveforms/              ← a PNG screenshot of GTKWave output, proving it works
+│   └── docs/                  ← any additional notes, timing diagrams, etc.
+│
+├── esp32-bare-metal-gpio/
+│   ├── README.md              ← what it does, wiring diagram/photo, how to build & flash
+│   ├── src/                   ← your .c files
+│   ├── include/                ← your register-map header files
+│   └── media/                  ← a short video/gif of the LED actually blinking
+│
+├── tinyml-gesture-classifier/
+│   ├── README.md
+│   ├── training/                ← the Python/PyTorch training notebook
+│   ├── firmware/                ← the C++ TFLite Micro deployment code
+│   └── model/                   ← the quantized .tflite file itself
+│
+└── README.md                    ← your PROFILE README — a short intro, and a
+                                    curated table linking to your 4-6 BEST
+                                    projects with one-line descriptions each</code></pre>
+
+      <p><strong>Non-negotiable per-project README elements</strong>: <strong>(1)</strong> a one-paragraph description of what problem this solves, <strong>(2)</strong> a block diagram or photo/GIF — evidence it actually works, not just source code sitting there unexplained, <strong>(3)</strong> exact build/run instructions someone else could follow, and <strong>(4)</strong> what you'd improve with more time — this last one specifically signals engineering maturity to anyone evaluating it. A repository with 15 commits, a clear README, and a working demo GIF will outperform a repository with 200 commits and no explanation, every single time, in front of a human reviewer.</p>
+    </section>
+
+    <section class="chapter" id="closing">
+      <h2>Closing Note</h2>
+      <p>You now have, in one document, the physics underneath every chip, the language to design one (Verilog/FSMs/RISC-V), the language to program one (bare-metal C/ARM Cortex-M), the languages chips use to talk to the physical world (UART/SPI/I2C/CAN), the software layer that coordinates complex real systems (RTOS/embedded Linux), the place where all of this is currently colliding with AI (TinyML/Edge accelerators), the actual tools the industry uses every day, an honest map of where the jobs and money are, and a concrete 4-year plan to build real, provable evidence of your own skill in both directions before you have to choose.</p>
+      <p>Section 0's test still stands as the real answer to your original question: build the S3-S4 projects in the table above for <em>both</em> tracks, notice honestly which one you keep returning to without being told to, and trust that signal over any comparison table — including every one in this document.</p>
+      <p><strong>Good luck, Vinnu — go build something.</strong></p>
     </section>
 
   </main>
 </div>
 
-<footer>Hardware Systems Mastery Vault — built section by section · more chapters landing soon</footer>
+<footer>Hardware Systems Mastery Vault — complete, all 10 sections (0-9)</footer>
 
 <script>
   document.addEventListener('DOMContentLoaded', function () {

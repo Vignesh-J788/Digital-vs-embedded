@@ -3,8 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Hardware Systems Mastery — Digital Electronics, Embedded Systems &amp; Edge AI</title>
-
+<title>Section 5 — RTOS &amp; System Software | Hardware Systems Mastery</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.css">
@@ -213,713 +212,99 @@
 </style>
 </head>
 <body>
-
-<button id="hamburger" onclick="document.getElementById('sidebar').classList.toggle('open')" aria-label="Toggle navigation">
-  <span></span>
-</button>
-
 <div class="shell">
-
-  <aside id="sidebar">
-    <div class="brand">
-      <div class="tag">ECE · Reference Vault</div>
-      <h1>Hardware Systems Mastery</h1>
-    </div>
-    <nav class="toc">
-      <a href="#sec0" class="active">0 · Choosing Your Domain</a>
-      <div class="group-label">Part I — Foundations</div>
-      <a href="#sec1"><span class="n">01</span> Physics &amp; Math Foundations</a>
-      <a href="#sec2"><span class="n">02</span> Digital VLSI &amp; Silicon</a>
-      <a href="#sec3"><span class="n">03</span> Embedded &amp; ARM Cortex</a>
-      <a href="#sec4"><span class="n">04</span> Comm. Protocols</a>
-      <div class="group-label">Coming next</div>
-      <a class="pending"><span class="n">05</span> RTOS &amp; System Software</a>
-      <a class="pending"><span class="n">06</span> Edge AI &amp; TinyML</a>
-      <a class="pending"><span class="n">07</span> Toolchains &amp; Debugging</a>
-      <a class="pending"><span class="n">08</span> Career Architecture</a>
-      <a class="pending"><span class="n">09</span> 4-Year Roadmap</a>
-    </nav>
-  </aside>
-
-  <main>
+  <main style="max-width:920px; margin:0 auto; padding:56px clamp(20px,6vw,88px) 100px;">
     <div class="hero">
-      <div class="eyebrow">Digital Electronics · Embedded Systems · Edge AI</div>
-      <h1>Deep Learning &amp; Hardware Engineering Vault</h1>
-      <p class="lede">Built for a 2nd-year ECE student standing at the fork between two worlds — the silicon itself, and the machines built from it. Read Section 0 first, then work through the vault section by section.</p>
-      <div class="rail">
-        <div class="node done">0 · Decision</div>
-        <div class="node done">1 · Foundations</div>
-        <div class="node done">2 · VLSI</div>
-        <div class="node done">3 · Embedded</div>
-        <div class="node done">4 · Protocols</div>
-        <div class="node">5 · RTOS</div>
-        <div class="node">6 · Edge AI</div>
-        <div class="node">7 · Tools</div>
-        <div class="node">8 · Careers</div>
-        <div class="node">9 · Roadmap</div>
-      </div>
+      <div class="eyebrow">Hardware Systems Mastery Vault — Standalone Excerpt</div>
+      <h1>Section 5 · Real-Time Operating Systems (RTOS) &amp; System Software</h1>
+      <p class="lede">Task states, context switching, mutexes/semaphores, priority inversion (and the Mars Pathfinder story), and embedded Linux fundamentals.</p>
     </div>
+    <section class="chapter" id="sec5">
+      <h2>5 · Real-Time Operating Systems (RTOS) &amp; System Software</h2>
 
-    <section class="chapter" id="sec0">
-      <h2>Section 0 — Before You Begin: Two Worlds, One Choice</h2>
+      <p>Everything in Section 3 was <strong>bare-metal</strong> — one <code>main()</code>, one <code>while(1)</code> loop, and interrupts. That's fine for a single LED. The moment a real product needs to juggle many independent responsibilities at once — reading a sensor every 10ms, running a control loop every 5ms, handling Bluetooth packets whenever they arrive, updating a display every 100ms — writing all of that by hand inside one giant loop becomes unmanageable. An <strong>RTOS</strong> is a small, extremely lightweight piece of software that gives you the illusion of many independent programs ("tasks") running at once, even on a single CPU core.</p>
 
-      <p>Imagine two kinds of builders.</p>
+      <h3>5.1 RTOS Core Concepts</h3>
 
-      <p><strong>Builder A</strong> works inside a mountain. Nobody ever sees what she builds — it's buried in sealed rock, invisible forever once it's done. But inside that rock, she has laid out <em>millions</em> of tiny tunnels, gates, and switches so precisely that electricity flowing through them can add numbers, remember values, and make decisions — all in billionths of a second. She doesn't get to "plug in a wire and see a light blink." Her feedback loop is <em>slow</em>: she designs for months, simulates for months more, and only after all of that does she send her design off to a factory (a "fab") that costs billions of dollars to build a physical chip. If she made a mistake, she often can't fix it — she has to wait for the <em>next</em> chip. This is <strong>Digital VLSI</strong> (Very-Large-Scale Integration) — the art of designing the silicon itself.</p>
+      <p><strong>Determinism vs Latency</strong> — the reason RTOS exists as its own category. A general-purpose OS (Windows, desktop Linux) optimizes for <em>average</em> throughput — fine if a task occasionally waits an extra 200ms. An RTOS optimizes for <strong>worst-case, guaranteed response time</strong> — if a control loop needs to run within 2ms of a sensor interrupt, the scheduler must <em>guarantee</em> that bound, every single time. This guarantee is <strong>determinism</strong>, and it's what "real-time" actually means — not "fast," but "predictable, bounded, and never missing a deadline."</p>
 
-      <p><strong>Builder B</strong> works above ground, with things you can hold. He takes a chip that Builder A (or a company like her) already built — a microcontroller — and wires it to motors, sensors, screens, and radios. He writes software that lives <em>directly on the metal</em> of that chip, with no operating system holding his hand. His feedback loop is <em>fast</em>: he changes one line of code, flashes it to the board in ten seconds, and sees a motor spin or an LED blink immediately. This is <strong>Embedded Systems</strong> — the art of making silicon <em>do something</em> in the physical world.</p>
-
-      <p>Here is the honest, uncomfortable truth about choosing between them:</p>
-
-      <table>
-        <tr><th></th><th>Digital VLSI</th><th>Embedded Systems</th></tr>
-        <tr><td><strong>Feedback loop</strong></td><td>Slow — simulation-only for years before real silicon</td><td>Fast — seconds to minutes, physical results</td></tr>
-        <tr><td><strong>What you're closest to</strong></td><td>Physics, transistors, timing</td><td>Code, protocols, real-world devices</td></tr>
-        <tr><td><strong>Entry barrier (India)</strong></td><td>High — top VLSI roles often need M.Tech</td><td>Lower — a strong B.Tech portfolio can get you in</td></tr>
-        <tr><td><strong>Number of jobs</strong></td><td>Fewer, concentrated in hub cities</td><td>Far more, spread across many industries</td></tr>
-        <tr><td><strong>Tool cost</strong></td><td>Extremely expensive EDA licenses (lakhs–crores)</td><td>Cheap — a ₹500 ESP32 board is a full lab</td></tr>
-        <tr><td><strong>What a 2nd-year can DIY</strong></td><td>Simulate for free (EDA Playground, iverilog); real chips stay out of reach</td><td>Actually build, wire, and ship real working devices</td></tr>
-        <tr><td><strong>What "mastery" looks like</strong></td><td>Deep physics + timing closure across huge designs</td><td>Deep real-time constraints + system integration</td></tr>
-      </table>
-
-      <div class="note">
-        <strong>Why this vault is built the way it is:</strong> Sections 1–2 teach the physics underlying chips and how to actually design digital logic in Verilog — the VLSI side, fully doable in free simulators. Sections 3–5 teach bare-metal register-level programming and real protocols — the embedded side, fully doable on your own ESP32. Section 6 shows where the two worlds are fusing right now (hardware built specifically to run neural networks). Section 8 gives an honest career and salary picture for India.
-      </div>
-
-      <p><strong>The test that actually tells you the answer:</strong> after finishing a Verilog FSM exercise in Section 2 <em>and</em> a bare-metal GPIO driver exercise in Section 3, ask yourself one question — "Which one did I stay up late doing for fun, not because it was assigned?" That answer is more reliable than any comparison table above. Keep a small note as you move through this vault: which sections make you lean forward, and which make you check the clock.</p>
-    </section>
-
-    <section class="chapter" id="sec1">
-      <h2>1 · Physical &amp; Mathematical Foundations</h2>
-
-      <p>Every digital chip you will ever touch — a RISC-V core, an ESP32, an Nvidia GPU — is, underneath everything, just an enormous number of tiny electrically-controlled switches arranged to implement Boolean logic. Before you can understand anything in VLSI or embedded systems, you need to understand these switches, how fast they can flip, and how numbers actually live inside them as voltages.</p>
-
-      <h3>1.1 Transistor Physics to Logic Gates</h3>
-
-      <p><strong>The switch, explained like you're holding it in your hand.</strong> A MOSFET (Metal-Oxide-Semiconductor Field-Effect Transistor) is a water tap. Think of it literally as a tap over a pipe:</p>
-      <ul>
-        <li>The <strong>Gate</strong> terminal is the tap handle — you turn it with a <em>voltage</em>, not your hand.</li>
-        <li>The <strong>Source</strong> and <strong>Drain</strong> are the two ends of the pipe — current can flow between them.</li>
-        <li>The <strong>Body/Substrate</strong> is the material the pipe is carved into.</li>
-      </ul>
-
-      <p>There are two flavors, and they behave like opposite taps:</p>
-      <ul>
-        <li><strong>NMOS</strong>: the tap opens (conducts) when the gate voltage is <strong>HIGH</strong>. Good at connecting a node to ground (0V).</li>
-        <li><strong>PMOS</strong>: the tap opens (conducts) when the gate voltage is <strong>LOW</strong>. Good at connecting a node to the supply (Vdd).</li>
-      </ul>
-
-      <p><strong>Why CMOS won the world.</strong> CMOS (Complementary MOS) pairs one PMOS and one NMOS for every gate. For any stable input, exactly one of the two conducts and the other is off — current never flows straight from Vdd to ground during steady state, only for the brief instant while switching. This is why CMOS chips run cool and can be crammed with billions of transistors.</p>
-
-      <h4>The CMOS Inverter — the atomic unit of all digital logic</h4>
-      <pre><code>        Vdd (e.g. 1.2V)
-         |
-        ═╪═   PMOS  (conducts when IN = LOW)
-         |
-   IN ───┤
-         |
-        ═╪═   NMOS  (conducts when IN = HIGH)
-         |
-        GND
-
-   OUT is tapped from the node between the two transistors (the middle wire).</code></pre>
+      <h4>Task States — the life cycle every RTOS task moves through</h4>
+      <pre><code>                     ┌──────────┐
+        created ───► │  READY   │ ◄────────────┐
+                     └────┬─────┘               │
+                          │ scheduler picks      │ higher-priority
+                          │ this task to run     │ task preempts,
+                          ▼                      │ OR task's time
+                     ┌──────────┐                │ slice ends
+                     │ RUNNING  │────────────────┘
+                     └────┬─────┘
+                          │ task blocks on a
+                          │ semaphore, delay,
+                          │ or queue-wait
+                          ▼
+                     ┌──────────┐   event/timeout
+                     │ BLOCKED  │───────────────► back to READY
+                     └──────────┘</code></pre>
 
       <ul>
-        <li>When <code>IN = 0</code> (LOW): PMOS conducts, NMOS is off → OUT pulled to Vdd → <code>OUT = 1</code>.</li>
-        <li>When <code>IN = 1</code> (HIGH): NMOS conducts, PMOS is off → OUT pulled to GND → <code>OUT = 0</code>.</li>
+        <li><strong>READY</strong>: eligible to run, waiting for the scheduler's turn.</li>
+        <li><strong>RUNNING</strong>: actually executing on the CPU right now (only one task per core in this state).</li>
+        <li><strong>BLOCKED</strong>: waiting on something — a timer delay, a semaphore, incoming queue data — and not competing for CPU time until that event occurs.</li>
       </ul>
-      <p>That single circuit is a <strong>NOT gate</strong> — the fundamental block from which NAND, NOR, AND, OR, XOR, flip-flops, adders, and eventually entire CPUs are built, purely by wiring more PMOS/NMOS transistors in series and parallel.</p>
 
-      <h3>1.2 Power Equations — Why Your Phone Gets Hot</h3>
+      <p><strong>Context Switching</strong> — the mechanical trick that makes "multiple tasks on one CPU" possible. When the scheduler switches from Task A to Task B, it saves <em>every</em> CPU register Task A was using (including the Program Counter) onto Task A's private stack, then loads Task B's previously-saved registers from Task B's stack into the CPU. This is exactly why Section 3.1's <strong>PSP</strong> matters — each task gets its own private stack, and the RTOS just repoints PSP at a different task's stack to "switch." This save/restore takes a small, bounded number of cycles — RTOS designers work hard to keep this overhead small and predictable, since it can happen thousands of times per second.</p>
 
-      <p><strong>Dynamic Power</strong> — power consumed while switching:</p>
-      <p>\[ P_{dynamic} = \alpha \cdot C \cdot V^2 \cdot f \]</p>
+      <h3>5.2 Synchronization Primitives</h3>
+
+      <p>The moment you have multiple tasks, you get a new bug category that doesn't exist in single-threaded bare-metal code: two tasks touching the same shared resource at the same time, in unpredictable order.</p>
+
+      <p><strong>Race Condition</strong> — the core danger. Two tasks both doing <code>counter++</code> on a shared variable: that single line is actually 3 CPU instructions — read, increment, write. If Task A is interrupted by Task B exactly between the read and write, Task B's entire increment can be silently lost. Worse, this bug is <strong>non-deterministic</strong> — it might not show up for millions of iterations, then appear once under specific timing, making it one of the hardest bug classes to reproduce.</p>
+
+      <p><strong>Mutex (Mutual Exclusion lock)</strong> — solves this by ensuring only one task can hold the "lock" on a shared resource at a time. A task calls <code>mutex_lock()</code> before touching the resource and <code>mutex_unlock()</code> after; another task trying to lock an already-locked mutex simply <strong>blocks</strong> until release. A mutex has <strong>ownership</strong> — only the locking task can unlock it, which is what enables priority inheritance below.</p>
+
+      <p><strong>Binary vs Counting Semaphores</strong> — semaphores solve <strong>signaling</strong> between tasks (or an ISR and a task), not protecting shared data.</p>
       <ul>
-        <li>\(\alpha\) — <strong>activity factor</strong>: the fraction of clock cycles where this node actually switches (0 to 1).</li>
-        <li>\(C\) — <strong>capacitance</strong> being charged/discharged (bigger wires/transistors = bigger C).</li>
-        <li>\(V\) — <strong>supply voltage</strong>, squared. Dropping voltage from 1.2V to 0.9V cuts dynamic power by more than 40%.</li>
-        <li>\(f\) — <strong>clock frequency</strong>, directly proportional. Double the clock, double the dynamic power.</li>
+        <li><strong>Binary semaphore</strong>: a simple 0/1 flag. Classic use: an ISR "gives" it the instant a hardware event occurs (e.g. a UART byte fully received), and a task "taking" (blocked on) it wakes instantly to process — far more efficient than polling a status register in a loop.</li>
+        <li><strong>Counting semaphore</strong>: like a binary semaphore but can exceed 1, acting as a resource counter (e.g. managing a pool of 4 DMA channels) — each take decrements, each give increments, and a task blocks only once the count hits zero.</li>
       </ul>
 
-      <p><strong>Static (Leakage) Power</strong> — power consumed even at rest, because real transistors are never a perfect open switch when "off":</p>
-      <p>\[ P_{static} = I_{leakage} \cdot V \]</p>
-      <p>At older nodes (90nm) leakage was negligible. At modern nodes (5nm, 3nm), transistors are so small electrons "tunnel" through gate insulation only a few atoms thick — leakage has become a massive fraction of total power.</p>
+      <p><strong>A critical subtlety:</strong> unlike a mutex, a semaphore has <strong>no ownership</strong> — any task or ISR can "give" it, even one that never "took" it. This is exactly why semaphores are right for ISR-to-task signaling (an ISR should never use a mutex — mutex blocking logic is unsafe in interrupt context) while mutexes are right for protecting shared data between tasks.</p>
 
-      <p><strong>Total Power:</strong></p>
-      <p>\[ P_{total} = P_{dynamic} + P_{static} \]</p>
+      <p><strong>Queues</strong> — the RTOS's built-in mechanism for safely passing actual <em>data</em> (not just a signal) between tasks, or from an ISR into a task. A fixed-size, RTOS-managed FIFO; <code>queue_send()</code> copies data in, <code>queue_receive()</code> copies data out, and the RTOS handles all internal locking so you never manually protect the queue's state.</p>
 
-      <h3>1.3 Timing Analysis — The Heartbeat of Every Digital Circuit</h3>
+      <div class="note"><strong>Priority Inversion</strong> — the classic RTOS scheduling nightmare. Three tasks: Low, Medium, High priority. Low locks a mutex for a shared resource. High becomes ready and wants that same mutex, so it blocks on Low. Expected so far — but now Medium, which needs no shared resource at all, becomes ready. Since Medium outranks Low, the scheduler runs Medium instead of Low. Low never finishes to unlock the mutex, so High — the highest-priority task in the whole system — sits stuck behind a lower-priority task. This nearly doomed NASA's 1997 Mars Pathfinder mission (repeated watchdog resets, diagnosed and fixed remotely after landing).</div>
 
-      <p>Every synchronous circuit is built from <strong>flip-flops</strong> (memory elements capturing a value on a clock edge) connected by <strong>combinational logic</strong> (gates computing in between). Data must arrive at the next flip-flop with enough margin before and after the clock edge.</p>
+      <p><strong>Priority Inheritance — the standard fix.</strong> When a high-priority task blocks waiting for a mutex held by a lower-priority task, the RTOS temporarily boosts the lower-priority holder's priority up to match the waiting task — for exactly as long as it holds the mutex. This guarantees the holder can't be starved out by a medium-priority task in between, finishes quickly, and releases the mutex to the genuinely higher-priority task as fast as possible. Most production RTOSes (FreeRTOS, Zephyr, ThreadX) implement priority-inheritance mutexes as the default type specifically because of this failure mode.</p>
 
-      <p><strong>Setup Time</strong> (\(t_{setup}\)): data must be stable for at least this long <strong>before</strong> the clock edge, or the flip-flop may capture garbage.</p>
-      <p><strong>Hold Time</strong> (\(t_{hold}\)): data must remain stable for at least this long <strong>after</strong> the clock edge, for the same reason.</p>
+      <h3>5.3 Embedded Linux Fundamentals</h3>
 
-      <pre><code>ASCII Timing Diagram — Setup and Hold Windows around a Rising Clock Edge
+      <p>For products with more computing demands than a microcontroller-class RTOS can comfortably handle — a camera feed, a full network stack, a graphical touchscreen UI — <strong>embedded Linux</strong> is the standard choice instead of (or alongside) an RTOS.</p>
 
-CLK   ______        ┌──────────────
-          |        |
-          |________|
-                    ^
-                    |  (rising edge — flip-flop samples D HERE)
-                    |
-D     ────╳╳╳╳──────┼──────╳╳╳╳────
-          &lt;---------&gt;      &lt;-------&gt;
-           t_setup            t_hold
-      (D must be stable      (D must stay stable
-       BEFORE this window)    AFTER the edge)
+      <p><strong>Bootloader (U-Boot)</strong> — the very first software that runs when power is applied, before Linux itself exists in memory. Its job: initialize the bare minimum hardware needed to read the Linux kernel image off storage (SD card, eMMC, SPI flash), load it into RAM, and jump execution into it. U-Boot also commonly provides an interactive serial-console shell for low-level recovery, firmware updates, and hardware bring-up debugging — often the first thing an embedded Linux engineer interacts with on brand-new custom hardware.</p>
 
-      |&lt;------ the "keep-out zone" — D must NOT change in here ------&gt;|</code></pre>
+      <p><strong>Linux Kernel</strong> — once U-Boot hands off control, the kernel initializes device drivers, memory management, process scheduling, and the filesystem, eventually launching the first user-space process (traditionally <code>init</code>, often <code>systemd</code> on modern embedded distributions).</p>
 
-      <p>If a signal arrives too late (setup violation) or changes too soon after the clock (hold violation), the flip-flop can enter <strong>metastability</strong> — its output hovers at an invalid voltage between 0 and 1 for an unpredictable time before randomly resolving. This is scary precisely because it's probabilistic: a chip might work for a million cycles and randomly fail on the millionth-and-first.</p>
+      <p><strong>Device Trees (.dts)</strong> — one of embedded Linux's most distinctive concepts. Unlike a desktop PC (which can dynamically discover most hardware via PCI/USB), an embedded board's layout — which I2C devices sit on which bus, which GPIO drives which chip-select, a sensor's interrupt line — is fixed and can't be auto-discovered. The <strong>Device Tree Source (.dts)</strong> is a plain-text description of the exact hardware layout, compiled into a binary <strong>Device Tree Blob (.dtb)</strong> loaded alongside the kernel at boot. This lets the <em>same</em> generic kernel binary support many different boards — only the <code>.dtb</code> changes, not the kernel.</p>
 
-      <p><strong>The fundamental timing equation</strong> — why a chip has a maximum clock frequency:</p>
-      <p>\[ T_{clk} \geq t_{cq} + t_{logic} + t_{setup} \]</p>
-      <ul>
-        <li>\(t_{clk}\) — the clock period (1/frequency)</li>
-        <li>\(t_{cq}\) — clock-to-Q delay: how long after the clock edge the source flip-flop updates its output</li>
-        <li>\(t_{logic}\) — propagation delay through the combinational logic in between</li>
-        <li>\(t_{setup}\) — the destination flip-flop's setup time requirement</li>
-      </ul>
-      <p>This is what "timing closure" means in VLSI — solving this inequality for every path in a chip with millions of paths.</p>
+      <pre><code>// A tiny illustrative device tree fragment — declaring an I2C temperature
+// sensor at address 0x48 on I2C bus 1
+&amp;i2c1 {
+    status = "okay";
+    temp_sensor@48 {
+        compatible = "ti,tmp102";
+        reg = &lt;0x48&gt;;             // the I2C address
+        interrupt-parent = &lt;&amp;gpio1&gt;;
+        interrupts = &lt;5 IRQ_TYPE_EDGE_FALLING&gt;;  // which GPIO pin, which edge
+    };
+};</code></pre>
 
-      <p><strong>Clock Skew</strong> is the difference in arrival time of the same clock edge at two different flip-flops, from the clock signal traveling different wire lengths. Positive skew helps setup timing but hurts hold timing, and vice versa.</p>
-      <p><strong>Clock Jitter</strong> is cycle-to-cycle variation in when the clock edge actually arrives, from noise in the clock generator (e.g. a PLL). Unlike skew, jitter is random and must be budgeted as a margin that can never be fully eliminated.</p>
-
-      <h3>1.4 Computer Arithmetic &amp; Number Systems</h3>
-
-      <p><strong>Two's Complement</strong> — how negative numbers physically exist in hardware. Hardware has no concept of a minus sign — only wires that are HIGH or LOW. Two's complement lets the same adder circuit handle positive and negative numbers identically. To negate a number: <strong>invert every bit, then add 1.</strong></p>
-
-      <pre><code>Example, 8-bit representation of +5 and -5:
-
- +5  =  0000 0101
-        1111 1010   (invert every bit — "ones' complement")
-      +          1
-        ─────────────
- -5  =  1111 1011</code></pre>
-
-      <p>Why this is brilliant — adding <code>5 + (-5)</code> with ordinary binary addition:</p>
-      <pre><code>   0000 0101
- + 1111 1011
- ────────────
- 1 0000 0000   → 8-bit result is 0000 0000, carry-out discarded → correctly = 0</code></pre>
-      <p>The same adder circuit that adds positive numbers also correctly adds negative ones — no special "subtractor" hardware needed. This is why two's complement is universal in digital hardware.</p>
-
-      <h4>Fixed-Point vs Floating-Point</h4>
-      <p><strong>Fixed-point</strong>: the binary point sits at a fixed, implicit position. A Q8.8 format has 8 integer + 8 fractional bits — <code>0000 0001.1000 0000</code> represents <code>1.5</code>. Simple, fast, exact for its resolution, but fixed range and precision — exactly why microcontrollers without a hardware FPU often use fixed-point math for speed.</p>
-
-      <p><strong>Floating-point (IEEE 754)</strong>: the binary point floats — sign, exponent, and mantissa, like scientific notation. A 32-bit float:</p>
-      <pre><code> [ 1 bit sign ][ 8 bits exponent ][ 23 bits mantissa ]
-   31           30............23   22..................0
-
- Value = (-1)^sign × 1.mantissa × 2^(exponent - 127)
-                                          ^
-                                    "bias" of 127</code></pre>
-      <p>Floating-point gives enormous range (~\(10^{-38}\) to ~\(10^{38}\)) at the cost of variable precision (numbers far from zero are less precise — why comparing floats with <code>==</code> is dangerous) and dedicated FPU hardware needs. This exact trade-off is why, in Section 6, quantizing a neural network from FP32 to INT8 is such a big deal for microcontrollers — INT8 math is dramatically cheaper in silicon area, power, and speed than FP32.</p>
+      <p><strong>User Space vs Kernel Space</strong> — the fundamental security/stability boundary in any Linux system. <strong>Kernel space</strong> is where the OS core, drivers, and memory manager run, with full unrestricted hardware access. <strong>User space</strong> is where ordinary applications run, sandboxed with no direct hardware access — an application wanting to read a sensor must go through a <strong>system call</strong> into the kernel, which validates and performs the access on its behalf. This boundary is why a buggy user-space application can crash itself without taking down the whole device, while a bug in kernel-space code (a faulty driver) can crash or corrupt the entire system — exactly why driver code is held to a much higher standard of scrutiny than typical application code.</p>
 
     </section>
 
-    <section class="chapter" id="sec2">
-      <h2>2 · Digital VLSI &amp; Silicon Architecture</h2>
-
-      <p>This is the section where you stop reading about transistors and start <em>building</em> with them — not physically (that needs a billion-dollar fab), but through <strong>Hardware Description Languages (HDLs)</strong>, which let you describe circuit behavior in text and simulate it exactly as real silicon would behave. Every example below is something you can run for free right now in a tool like <strong>EDA Playground</strong> or by installing <strong>Icarus Verilog (iverilog)</strong> + <strong>GTKWave</strong> on your own laptop.</p>
-
-      <h3>2.1 Hardware Description Languages: Verilog &amp; SystemVerilog Paradigms</h3>
-
-      <p>The single most important mental shift when learning Verilog: <strong>you are not writing a sequential program. You are describing a physical circuit that all exists and runs at the same time.</strong> Every <code>always</code> block you write is a separate piece of hardware, and all of them are active simultaneously, every instant, forever — there is no "line 1 runs before line 2" the way there is in C.</p>
-
-      <p><strong>Combinational logic</strong> — a circuit with NO memory, where the output depends only on the current inputs (like a NAND gate, an adder, or a multiplexer):</p>
-      <pre><code>// A 4-bit combinational adder — pure "wires and gates", no clock involved
-module adder4 (
-    input  [3:0] a,
-    input  [3:0] b,
-    output [4:0] sum   // 5 bits to hold the carry-out
-);
-    assign sum = a + b;   // 'assign' = continuous, combinational logic
-endmodule</code></pre>
-
-      <p><strong>Sequential logic</strong> — a circuit WITH memory, where the output depends on current inputs and what happened before, captured on clock edges:</p>
-      <pre><code>// A simple 8-bit up-counter with synchronous reset
-module counter8 (
-    input        clk,
-    input        rst_n,   // active-low reset
-    output reg [7:0] count
-);
-    always @(posedge clk) begin
-        if (!rst_n)
-            count &lt;= 8'd0;      // reset to zero
-        else
-            count &lt;= count + 1; // increment every clock edge
-    end
-endmodule</code></pre>
-
-      <h4>Blocking (=) vs Non-Blocking (&lt;=) — the #1 beginner bug in all of Verilog</h4>
-      <ul>
-        <li><code>=</code> (<strong>blocking</strong>) executes immediately, in program order, inside a single always block — use this <strong>only</strong> inside combinational <code>always @(*)</code> blocks.</li>
-        <li><code>&lt;=</code> (<strong>non-blocking</strong>) schedules the update for the end of the current time step, so all right-hand sides use <em>old</em> values before anything updates — use this <strong>always</strong> inside clocked <code>always @(posedge clk)</code> blocks.</li>
-      </ul>
-
-      <p>Why it matters — a 2-stage shift register meant to delay a signal by two clock cycles:</p>
-      <pre><code>// CORRECT — non-blocking assignments
-always @(posedge clk) begin
-    q1 &lt;= d;    // q1 gets the OLD value of d
-    q2 &lt;= q1;   // q2 gets the OLD value of q1 (not the new one just computed above!)
-end
-// Result: q2 always lags q1 by one cycle, q1 lags d by one cycle —
-// the correct behavior of two real, physical flip-flops in series.</code></pre>
-
-      <pre><code>// WRONG — blocking assignments in sequential logic
-always @(posedge clk) begin
-    q1 = d;     // q1 updates immediately
-    q2 = q1;    // q2 immediately copies the NEW q1 (same cycle!)
-end
-// Result: q2 = d in the SAME clock edge — you've accidentally built ONE
-// flip-flop of delay instead of TWO. In real silicon this is physically
-// impossible; the simulator is quietly lying to you about the hardware.</code></pre>
-
-      <div class="note"><strong>Rule of thumb:</strong> combinational block → blocking <code>=</code>. Clocked block → non-blocking <code>&lt;=</code>. Mixing them incorrectly is the #1 reason a design simulates fine but synthesizes into completely different (or broken) real hardware.</div>
-
-      <h3>2.2 Finite State Machine (FSM) Design: Mealy vs Moore</h3>
-
-      <p>An FSM is how you give a circuit "memory of context" — the same input can produce different behavior depending on what state the circuit is currently in. Almost every real digital system (a UART controller, a traffic light, a vending machine, a CPU's control unit) is fundamentally an FSM.</p>
-      <ul>
-        <li><strong>Moore machine</strong>: output depends <strong>only on the current state</strong>. Outputs are stable, changing only on clock edges — generally safer and easier to reason about.</li>
-        <li><strong>Mealy machine</strong>: output depends on <strong>current state AND current input</strong>. Can react within the same clock cycle — often fewer states, but outputs can glitch on noisy inputs.</li>
-      </ul>
-
-      <p><strong>Example:</strong> a sequence detector that outputs 1 when it sees the bit pattern <code>1011</code> on a serial input line (overlapping matches allowed) — Moore-style, output tied purely to state:</p>
-      <pre><code>module seq_detector_moore (
-    input      clk,
-    input      rst_n,
-    input      din,
-    output reg dout
-);
-    // State encoding
-    localparam S0=3'd0, S1=3'd1, S2=3'd2, S3=3'd3, S_MATCH=3'd4;
-    reg [2:0] state, next_state;
-
-    // Sequential: state register (the ONLY clocked block)
-    always @(posedge clk) begin
-        if (!rst_n) state &lt;= S0;
-        else        state &lt;= next_state;
-    end
-
-    // Combinational: next-state logic
-    always @(*) begin
-        case (state)
-            S0:      next_state = din ? S1 : S0;
-            S1:      next_state = din ? S1 : S2;      // saw "1"
-            S2:      next_state = din ? S3 : S0;      // saw "10"
-            S3:      next_state = din ? S_MATCH : S2; // saw "101"
-            S_MATCH: next_state = din ? S1 : S2;       // saw "1011" -&gt; match!
-            default: next_state = S0;
-        endcase
-    end
-
-    // Combinational: Moore output logic — depends ONLY on 'state'
-    always @(*) begin
-        dout = (state == S_MATCH);
-    end
-endmodule</code></pre>
-
-      <p>Notice the <strong>three-always-block Moore FSM template</strong>: (1) state register, (2) next-state logic, (3) output logic. This template will get you through 90% of FSM design problems in coursework and interviews. A Mealy version would compute <code>dout</code> combinationally from <code>(state, din)</code> together — it can detect the match one cycle "earlier" but becomes vulnerable to glitches on <code>din</code>.</p>
-
-      <h3>2.3 Computer Architecture: The 5-Stage RISC-V Pipeline</h3>
-
-      <p>A single instruction doesn't execute instantly — it moves through distinct stages, and a pipelined CPU overlaps multiple instructions at different stages simultaneously, the same way a car factory assembly line has multiple cars in different stages of assembly at once.</p>
-
-      <pre><code> Classic 5-Stage RISC-V Pipeline
-
-  IF  →  ID  →  EX  →  MEM  →  WB
-  |       |      |       |      |
-Fetch   Decode  Execute Memory Write
-instr   & read  (ALU)   access Back
-from    regs                  (result
-memory                        to reg
-                               file)
-
- Timeline — 4 instructions overlapping (each row = 1 instruction, each column = 1 cycle):
-
-           Cycle:  1    2    3    4    5    6    7    8
- Instr 1 (I1):     IF   ID   EX   MEM  WB
- Instr 2 (I2):          IF   ID   EX   MEM  WB
- Instr 3 (I3):               IF   ID   EX   MEM  WB
- Instr 4 (I4):                    IF   ID   EX   MEM  WB
-
- Without pipelining: 4 × 5 = 20 cycles. With pipelining (ideal, no hazards): 8 cycles — near-4x speedup.</code></pre>
-
-      <p><strong>Stage responsibilities:</strong></p>
-      <ul>
-        <li><strong>IF</strong> — read the next instruction from instruction memory at the Program Counter (PC) address.</li>
-        <li><strong>ID</strong> — decode the opcode, read source operands from the register file.</li>
-        <li><strong>EX</strong> — the ALU performs the computation (add, subtract, compare, compute a memory address).</li>
-        <li><strong>MEM</strong> — for loads/stores, read from or write to data memory; other instructions pass through.</li>
-        <li><strong>WB</strong> — write the final result back into the register file.</li>
-      </ul>
-
-      <p><strong>Hazards — when the pipeline's overlapping breaks down:</strong></p>
-      <table>
-        <tr><th>Hazard</th><th>What happens</th><th>Analogy</th><th>Fix</th></tr>
-        <tr><td><strong>Structural</strong></td><td>Two instructions need the same hardware resource in the same cycle</td><td>Two cars need the same paint booth at once</td><td>Duplicate the resource (Harvard architecture), or stall</td></tr>
-        <tr><td><strong>Data</strong></td><td>An instruction needs a value a prior, still-in-flight instruction hasn't written back yet</td><td>Next car needs a part the previous station hasn't finished installing</td><td><strong>Forwarding/bypassing</strong> the ALU result directly to the next EX stage; a <strong>stall/bubble</strong> when forwarding can't cover it</td></tr>
-        <tr><td><strong>Control</strong></td><td>A branch's outcome isn't known until EX, but IF already had to guess what to fetch next</td><td>Not knowing which fork the road takes until halfway down one path</td><td><strong>Branch prediction</strong> + pipeline <strong>flush</strong> on misprediction</td></tr>
-      </table>
-
-      <p>Modern high-performance cores push this further — deeper pipelines (10-20+ stages), out-of-order execution, branch predictors right over 95% of the time — but all built from these same three hazard categories at the core.</p>
-
-      <h3>2.4 Synthesis &amp; Physical Design Flow: RTL → Tape-out</h3>
-
-      <p>This is the industrial pipeline that turns the Verilog you write into an actual physical chip — understanding it is what separates "I can write Verilog" from "I understand VLSI as a career":</p>
-
-      <pre><code>  RTL Design           Your Verilog/SystemVerilog code (what you write)
-       ↓
-  Functional Sim       Verify logical correctness (iverilog, VCS, QuestaSim)
-       ↓
-  Logic Synthesis       Tool (Synopsys Design Compiler, Cadence Genus) converts
-                         RTL into a "gate-level netlist" — real standard-cell
-                         gates (AND2, NAND3, DFF...) from a vendor cell library,
-                         optimized for area / speed / power
-       ↓
-  Static Timing         STA tool checks EVERY path against the t_setup / t_hold
-  Analysis (STA)         equations from Section 1.3 — "timing closure" means
-                         every single path passes
-       ↓
-  Place & Route (P&R)   Tool decides the PHYSICAL x,y location of every gate,
-                         then draws the actual metal wires connecting them —
-                         where clock skew and real physical delay get finalized
-       ↓
-  Physical Verification  DRC (obeys the fab's manufacturing rules?) and
-                         LVS (does the layout match the intended circuit?)
-       ↓
-  Tape-out               Final verified design sent to the fab (TSMC, Samsung,
-                         GlobalFoundries) as a GDSII file — the manufacturing
-                         "recipe" for the physical wafers</code></pre>
-
-      <p>Each arrow above is, in a real VLSI job, often an entire specialized <em>role</em> — synthesis engineer, STA/timing engineer, physical design (P&amp;R) engineer, DFT engineer. Worth remembering for Section 8: a VLSI career is rarely "design the whole chip alone" — it's usually deep specialization in one or two of these stages.</p>
-
-    </section>
-
-    <section class="chapter" id="sec3">
-      <h2>3 · Embedded Systems &amp; ARM Cortex Microarchitectures</h2>
-
-      <p>This is the section where things start blinking, spinning, and beeping on your own desk. Everything here is written as <strong>bare-metal</strong> code — no vendor HAL, no Arduino <code>digitalWrite()</code>. You write directly to the same memory-mapped registers the HAL uses internally. This is slower to write but it's the only way to actually understand what a microcontroller is doing — exactly the skill that separates "I can use STM32CubeIDE's generated code" from "I can debug a system when the generated code breaks."</p>
-
-      <div class="note"><strong>Note on your ESP32:</strong> ESP32 uses a Xtensa (or, in newer variants, RISC-V) core, not ARM Cortex-M. The <em>concepts</em> below — memory-mapped registers, interrupt controllers, volatile pointers, bit-masking — transfer directly. Only exact register names/addresses differ. This section uses ARM Cortex-M as the reference architecture because it's the most widely taught and documented; you'll find the equivalent ESP32 register map in Espressif's Technical Reference Manual using the same reading skills built here.</div>
-
-      <h3>3.1 ARM Cortex-M Architecture</h3>
-
-      <p><strong>The Memory Map — how a Cortex-M "sees" everything as an address.</strong> Peripherals (GPIO, timers, UART...) aren't accessed through special instructions — they're mapped into the <em>same</em> address space as regular RAM. Writing to a GPIO register is, to the CPU, indistinguishable from writing to a normal variable in RAM — it's just a <code>store</code> instruction to a specific address.</p>
-
-      <pre><code> Simplified Cortex-M Memory Map (addresses vary slightly by exact chip)
-
- 0xFFFFFFFF  ┌─────────────────────────┐
-             │   Vendor-Specific /      │
-             │   System Peripherals     │
- 0xE0000000  ├─────────────────────────┤  ← NVIC, SysTick, debug registers live here
-             │   External Device        │
- 0xA0000000  ├─────────────────────────┤
-             │   External RAM           │
- 0x60000000  ├─────────────────────────┤
-             │   Peripherals (GPIO,      │
-             │   Timers, UART, SPI, I2C) │  ← memory-mapped registers you'll write to
- 0x40000000  ├─────────────────────────┤
-             │   SRAM (your variables,   │
-             │   stack, heap)            │
- 0x20000000  ├─────────────────────────┤
-             │   Code (Flash — where      │
-             │   your compiled program    │
-             │   physically lives)         │
- 0x00000000  └─────────────────────────┘</code></pre>
-
-      <p><strong>NVIC — the Nested Vectored Interrupt Controller.</strong> This hardware block decides which interrupt handler runs when multiple things need CPU attention at once. Key registers you'll touch directly in bare-metal code:</p>
-      <ul>
-        <li><code>NVIC_ISER</code> (Interrupt Set-Enable) — write a 1 to a bit to enable that interrupt</li>
-        <li><code>NVIC_ICER</code> (Interrupt Clear-Enable) — write a 1 to disable it</li>
-        <li><code>NVIC_IPR</code> (Interrupt Priority) — set priority (lower number = higher priority, confusingly)</li>
-        <li>The NVIC also supports <strong>nesting</strong>: a higher-priority interrupt can itself interrupt a currently-running lower-priority handler — the "nested" in the name.</li>
-      </ul>
-
-      <p><strong>MSP vs PSP — two stack pointers, one CPU.</strong> Cortex-M has two physical stack pointer registers, though only one is "active" (mapped to R13) at any moment:</p>
-      <ul>
-        <li><strong>MSP (Main Stack Pointer)</strong>: used by default at reset, and always used while running any interrupt/exception handler.</li>
-        <li><strong>PSP (Process Stack Pointer)</strong>: optionally used by application/thread-mode code — exactly the mechanism an RTOS (Section 5) uses to give every task its own private stack while the kernel and interrupts share the MSP.</li>
-      </ul>
-
-      <p><strong>Register set:</strong> Cortex-M has 16 visible registers: <code>R0</code>-<code>R12</code> general-purpose, <code>R13</code> the active Stack Pointer, <code>R14</code> the <strong>Link Register (LR)</strong> holding the function-call return address, and <code>R15</code> the <strong>Program Counter (PC)</strong>. The <strong>PSR</strong> splits into APSR (flags: Negative, Zero, Carry, oVerflow), IPSR (currently-executing exception number), and EPSR (execution state bits) — often accessed together as <code>xPSR</code>.</p>
-
-      <h3>3.2 Bare-Metal C Engineering</h3>
-
-      <p><strong>The <code>volatile</code> keyword</strong> — the single most important C keyword in embedded systems. A compiler is normally free to optimize away repeated reads of a variable if it "sees" nothing in the C code changing it. But a hardware register's value can change outside the compiler's view — a UART status bit flips because a byte physically arrived over the wire, not because any C statement wrote to it. <code>volatile</code> tells the compiler: never assume you know this value — always read/write it from real memory, every time, exactly as written.</p>
-
-      <pre><code>// WITHOUT volatile — the compiler might optimize this into an infinite loop
-// that never actually re-reads the register:
-#define STATUS_REG (*(unsigned int*)0x40011000)
-while ((STATUS_REG & 0x1) == 0) { }   // BUG RISK: may never re-read hardware!
-
-// WITH volatile — forces a genuine memory read on every loop iteration:
-#define STATUS_REG (*(volatile unsigned int*)0x40011000)
-while ((STATUS_REG & 0x1) == 0) { }   // CORRECT — guaranteed fresh read every time</code></pre>
-
-      <h4>Bit-masking — touching ONE bit in a 32-bit register without disturbing the other 31</h4>
-      <pre><code>#define BIT(n)   (1U &lt;&lt; (n))
-
-reg |=  BIT(5);        // SET bit 5 to 1, leave every other bit untouched
-reg &amp;= ~BIT(5);        // CLEAR bit 5 to 0, leave every other bit untouched
-reg ^=  BIT(5);        // TOGGLE bit 5, leave every other bit untouched
-if (reg &amp; BIT(5)) { }  // READ/TEST bit 5 without modifying the register</code></pre>
-      <ul>
-        <li><code>|</code> (OR) — <strong>set</strong> bits (1 in the mask forces that bit to 1; 0 leaves it unchanged)</li>
-        <li><code>&amp;</code> with inverted mask (<code>~</code>) — <strong>clear</strong> bits (0 in the mask forces that bit to 0; 1 leaves it unchanged)</li>
-        <li><code>^</code> (XOR) — <strong>toggle</strong> bits marked 1 in the mask</li>
-        <li><code>&lt;&lt;</code> / <code>&gt;&gt;</code> — shift a mask into position, e.g. <code>BIT(5)</code> is really <code>1 &lt;&lt; 5</code></li>
-      </ul>
-
-      <h4>Memory-mapped register access with structs — the professional pattern</h4>
-      <p>Define a C <code>struct</code> whose layout exactly matches the peripheral's register layout, then overlay it onto the correct base address with a pointer cast:</p>
-      <pre><code>// Simplified GPIO peripheral register layout (order MUST match the datasheet exactly)
-typedef struct {
-    volatile uint32_t MODER;     // 0x00 — mode register (input/output/alt-fn/analog)
-    volatile uint32_t OTYPER;    // 0x04 — output type (push-pull / open-drain)
-    volatile uint32_t OSPEEDR;   // 0x08 — output speed
-    volatile uint32_t PUPDR;     // 0x0C — pull-up/pull-down config
-    volatile uint32_t IDR;       // 0x10 — input data register (read pin states)
-    volatile uint32_t ODR;       // 0x14 — output data register (write pin states)
-    volatile uint32_t BSRR;      // 0x18 — bit set/reset register (atomic pin control)
-} GPIO_TypeDef;
-
-#define GPIOA_BASE   0x40020000UL
-#define GPIOA        ((GPIO_TypeDef *) GPIOA_BASE)
-
-// Now register access reads like clean, self-documenting C:
-GPIOA-&gt;MODER |= (1U &lt;&lt; (5 * 2));   // set pin 5 to output mode (2 bits/pin in MODER)
-GPIOA-&gt;ODR   |= (1U &lt;&lt; 5);          // drive pin 5 HIGH</code></pre>
-
-      <h3>3.3 Complete Register-Level Driver: Bare-Metal GPIO + Timer + Interrupt (No Vendor HAL)</h3>
-
-      <p>This example blinks an LED using a hardware timer interrupt instead of a busy-wait <code>delay()</code> — the correct embedded pattern, since it doesn't block the CPU from doing anything else while "waiting."</p>
-
-      <pre><code>#include &lt;stdint.h&gt;
-
-/* ---- Minimal register map (STM32F4-style addresses, illustrative) ---- */
-#define RCC_AHB1ENR   (*(volatile uint32_t*)0x40023830)  // clock enable register
-#define GPIOA_MODER   (*(volatile uint32_t*)0x40020000)
-#define GPIOA_ODR     (*(volatile uint32_t*)0x40020014)
-
-#define TIM2_CR1      (*(volatile uint32_t*)0x40000000)  // control register
-#define TIM2_DIER     (*(volatile uint32_t*)0x4000000C)  // DMA/interrupt enable reg
-#define TIM2_SR       (*(volatile uint32_t*)0x40000010)  // status register
-#define TIM2_PSC      (*(volatile uint32_t*)0x40000028)  // prescaler
-#define TIM2_ARR      (*(volatile uint32_t*)0x4000002C)  // auto-reload value
-
-#define NVIC_ISER0    (*(volatile uint32_t*)0xE000E100)  // interrupt enable
-
-volatile uint8_t led_state = 0;
-
-/* ---- Step 1: enable peripheral clocks ---- */
-void clocks_init(void) {
-    RCC_AHB1ENR |= (1U &lt;&lt; 0);   // enable GPIOA clock (bit 0 = GPIOA per datasheet)
-    RCC_AHB1ENR |= (1U &lt;&lt; 0);   // (TIM2 clock enable would be a separate APB register)
-}
-
-/* ---- Step 2: configure PA5 as a general-purpose output (the LED pin) ---- */
-void gpio_init(void) {
-    GPIOA_MODER &amp;= ~(3U &lt;&lt; (5 * 2));  // clear the 2 mode bits for pin 5
-    GPIOA_MODER |=  (1U &lt;&lt; (5 * 2));  // set to '01' = general-purpose output
-}
-
-/* ---- Step 3: configure TIM2 to overflow (and interrupt) every ~500ms ---- */
-void timer_init(void) {
-    TIM2_PSC = 16000 - 1;    // assuming 16MHz clock -&gt; prescaler gives 1kHz tick
-    TIM2_ARR = 500 - 1;      // count 500 ticks -&gt; interrupt every 500ms
-    TIM2_DIER |= (1U &lt;&lt; 0);  // enable Update Interrupt (UIE bit)
-    TIM2_CR1  |= (1U &lt;&lt; 0);  // enable the counter (CEN bit)
-    NVIC_ISER0 |= (1U &lt;&lt; 28); // enable TIM2's interrupt line in the NVIC (IRQ# 28 here)
-}
-
-/* ---- Step 4: the Interrupt Service Routine — this function name must exactly
-   match the vector table entry so the hardware jumps here automatically ---- */
-void TIM2_IRQHandler(void) {
-    if (TIM2_SR &amp; (1U &lt;&lt; 0)) {        // check the Update Interrupt Flag (UIF)
-        TIM2_SR &amp;= ~(1U &lt;&lt; 0);        // MUST manually clear the flag, or fires forever
-        led_state ^= 1;               // toggle our tracked state
-        if (led_state)
-            GPIOA_ODR |= (1U &lt;&lt; 5);   // drive PA5 HIGH
-        else
-            GPIOA_ODR &amp;= ~(1U &lt;&lt; 5); // drive PA5 LOW
-    }
-}
-
-int main(void) {
-    clocks_init();
-    gpio_init();
-    timer_init();
-
-    while (1) {
-        // Main loop is completely free — the LED blinks entirely via interrupt,
-        // with zero CPU cycles wasted on a busy-wait delay loop. This is the
-        // core discipline of real embedded firmware: let hardware do the
-        // waiting, and keep the CPU free for real work.
-    }
-}</code></pre>
-
-      <p>Three details worth internalizing, because they show up in <em>every</em> real embedded driver you'll write: <strong>(1)</strong> clocks must be explicitly enabled before a peripheral does anything — an un-clocked peripheral is electrically "frozen"; <strong>(2)</strong> the interrupt flag (<code>TIM2_SR</code> here) must be manually cleared inside the ISR, or the same interrupt re-fires the instant you exit — an "interrupt storm"; <strong>(3)</strong> the ISR function name isn't arbitrary — it must match the name the linker script/vector table expects, since hardware jumps to that vector <em>by address</em>, not by any C-level call mechanism.</p>
-
-    </section>
-
-    <section class="chapter" id="sec4">
-      <h2>4 · Low-Level Communication Protocols Architecture</h2>
-
-      <p>Every sensor, display, and radio module you'll ever wire to a microcontroller talks over one of these four protocols. Understanding them at the <em>signal-line</em> level — not just "which library function to call" — is what lets you debug a real hardware problem with a logic analyzer instead of guessing.</p>
-
-      <h3>4.1 UART (Universal Asynchronous Receiver-Transmitter)</h3>
-
-      <p><strong>The defining feature: no shared clock line.</strong> Both sides must independently agree on a <strong>baud rate</strong> (bits per second) in advance and trust their own internal clocks to stay synchronized for the duration of one frame — this is what "asynchronous" means.</p>
-
-      <p><strong>Signal lines:</strong> just two, plus ground — <code>TX</code> (transmit) and <code>RX</code> (receive), cross-connected between two devices (device A's TX → device B's RX, and vice versa).</p>
-
-      <pre><code> Idle    Start   D0  D1  D2  D3  D4  D5  D6  D7   Parity  Stop   Idle
- ────┐   ┌───┐                                              ┌──── ────
-     │   │   │                                              │
-     └───┘   └──┴──┴──┴──┴──┴──┴──┴──┴──────────────────────┘
-     HIGH    LOW  (8 data bits, LSB first)          (opt.)  HIGH
-    (idle)  (start                                  parity  (stop
-             bit)                                    bit    bit(s))
-
- Line idles HIGH. A falling edge signals the START bit (always 0),
- which is how the receiver knows exactly when to begin sampling.</code></pre>
-
-      <ul>
-        <li><strong>Start bit</strong>: always 0 (LOW) — this transition is what the receiver's clock synchronizes to.</li>
-        <li><strong>Data bits</strong>: typically 8, sent LSB-first.</li>
-        <li><strong>Parity bit</strong> (optional): simple error detection — even parity means the total count of 1-bits (data+parity) is even; odd parity means odd. Catches single-bit errors only.</li>
-        <li><strong>Stop bit(s)</strong>: 1 or 2 bits, always HIGH — guarantees the line returns to idle before the next frame.</li>
-      </ul>
-
-      <p><strong>Common baud rates</strong>: 9600, 19200, 115200 bps standard; going faster increases sensitivity to clock drift, since there's no shared clock to correct for it — exactly why UART tops out at a few Mbps, far slower than SPI.</p>
-
-      <p><strong>Error checking</strong>: parity bit only (weak — misses any even number of bit flips), plus <strong>framing errors</strong> (receiver expects a HIGH stop bit and sees LOW, meaning bit sync was lost).</p>
-
-      <h3>4.2 SPI (Serial Peripheral Interface)</h3>
-
-      <p><strong>The defining feature: a shared clock, full-duplex, and no built-in addressing.</strong> SPI is the fastest of the four (routinely 10-50+ MHz), because a dedicated clock line means both sides always know exactly when to sample — no baud-rate guessing.</p>
-
-      <p><strong>Signal lines (4 total):</strong></p>
-      <ul>
-        <li><code>SCLK</code> — generated by the <strong>Master</strong>, tells every device exactly when to read/write a bit.</li>
-        <li><code>MOSI</code> (Master Out, Slave In) — data flowing master → slave.</li>
-        <li><code>MISO</code> (Master In, Slave Out) — data flowing slave → master.</li>
-        <li><code>CS</code>/<code>SS</code> — <strong>one per slave device</strong>, active-low; the master pulls a specific slave's CS LOW to "address" it. This is SPI's substitute for I2C-style addressing — and its main scalability weakness, since N slaves need N separate CS pins.</li>
-      </ul>
-
-      <p><strong>Full-duplex means simultaneous</strong>, not just bidirectional: on every clock pulse, the master shifts one bit OUT on MOSI and simultaneously shifts one bit IN on MISO — in the exact same clock cycle, unlike I2C or UART's half-duplex-per-frame behavior.</p>
-
-      <p><strong>The 4 SPI Modes</strong> — two independent settings:</p>
-      <ul>
-        <li><strong>CPOL</strong> (Clock Polarity): does the clock idle HIGH (CPOL=1) or LOW (CPOL=0)?</li>
-        <li><strong>CPHA</strong> (Clock Phase): is data sampled on the clock's first edge (CPHA=0) or second edge (CPHA=1) after CS goes active?</li>
-      </ul>
-
-      <table>
-        <tr><th>Mode</th><th>CPOL</th><th>CPHA</th><th>Idle State</th><th>Data Sampled On</th></tr>
-        <tr><td>0</td><td>0</td><td>0</td><td>LOW</td><td>Rising edge (1st)</td></tr>
-        <tr><td>1</td><td>0</td><td>1</td><td>LOW</td><td>Falling edge (2nd)</td></tr>
-        <tr><td>2</td><td>1</td><td>0</td><td>HIGH</td><td>Falling edge (1st)</td></tr>
-        <tr><td>3</td><td>1</td><td>1</td><td>HIGH</td><td>Rising edge (2nd)</td></tr>
-      </table>
-
-      <p>Getting the mode wrong is one of the most common "why won't my sensor respond" bugs in embedded work — every SPI device's datasheet states which mode it requires, and master and slave must match exactly.</p>
-
-      <pre><code> SPI Mode 0 Timing Diagram (CPOL=0, CPHA=0)
-
- CS    ‾‾‾\_________________________________/‾‾‾
-                (active LOW while transacting)
-
- SCLK  ________/‾\_/‾\_/‾\_/‾\_/‾\_/‾\_/‾\_/‾\____
-              1   2   3   4   5   6   7   8
-
- MOSI  ──X═══X═══X═══X═══X═══X═══X═══X═══X──
-           b7  b6  b5  b4  b3  b2  b1  b0
-           (data sampled on each RISING edge)</code></pre>
-
-      <p><strong>Error checking</strong>: SPI has <strong>none built in</strong> — no parity, no ACK, no CRC by default. It relies entirely on physical signal integrity; any error checking must be added at the application-protocol level.</p>
-
-      <h3>4.3 I2C (Inter-Integrated Circuit)</h3>
-
-      <p><strong>The defining feature: only 2 wires for potentially dozens of devices</strong>, using built-in addressing. Where SPI trades pin count for speed and simplicity, I2C trades speed for a dramatically simpler wiring topology.</p>
-
-      <p><strong>Signal lines (2, both open-drain with external pull-up resistors):</strong> <code>SDA</code> (Serial Data), <code>SCL</code> (Serial Clock).</p>
-
-      <p><strong>Open-drain matters</strong>: any device can pull the line LOW, but no device can drive it HIGH — external pull-ups do that. This is why multiple devices safely share the same two wires without conflict: if two devices write different values simultaneously, the line simply reads LOW (the "wired-AND" behavior) instead of a dangerous short.</p>
-
-      <p><strong>START and STOP conditions</strong> — how I2C creates frame boundaries without any dedicated start/stop line:</p>
-      <ul>
-        <li><strong>START</strong>: SDA transitions HIGH→LOW <em>while SCL is HIGH</em> (the only time SDA may change while SCL is high, elsewhere in a normal transfer).</li>
-        <li><strong>STOP</strong>: SDA transitions LOW→HIGH <em>while SCL is HIGH</em>.</li>
-      </ul>
-
-      <pre><code> I2C START and STOP Conditions
-
- SCL   ‾‾‾‾‾‾\_____/‾‾‾\_____/‾‾‾ ... ‾‾‾\_____/‾‾‾‾‾‾
- SDA   ‾‾‾\___________________ ... ___________/‾‾‾‾‾‾
-           ^                                   ^
-        START                                STOP
-      (SDA falls while             (SDA rises while
-       SCL is still HIGH)           SCL is still HIGH)</code></pre>
-
-      <p><strong>Frame structure:</strong> START → 7-bit (or 10-bit) slave Address + 1 R/W bit → ACK/NACK → 8 data bits → ACK/NACK → ... (repeat) → STOP.</p>
-
-      <p><strong>ACK/NACK</strong>: after every byte, the <em>receiver</em> pulls SDA LOW for one clock pulse to <strong>ACK</strong>nowledge. Leaving SDA HIGH is a <strong>NACK</strong> — "I didn't get that," "no device at that address," or "stop sending, I'm full."</p>
-
-      <p><strong>Arbitration</strong>: because SDA is open-drain and wired-AND, multiple masters can attempt to transmit simultaneously — each monitors SDA while transmitting, and if it sees LOW when it tried to drive HIGH, it knows another master won and backs off. This is how I2C supports <strong>multi-master</strong> configurations safely without a separate arbitration bus.</p>
-
-      <p><strong>Speed grades</strong>: Standard (100 kHz), Fast (400 kHz), Fast mode+ (1 MHz), High-speed (3.4 MHz) — all considerably slower than SPI, the trade-off for 2-wire, multi-device, built-in-addressing simplicity.</p>
-
-      <h3>4.4 CAN (Controller Area Network)</h3>
-
-      <p><strong>The defining feature: differential signaling and priority-based arbitration without a master</strong> — built for electrically noisy environments (cars, industrial machines).</p>
-
-      <p><strong>Signal lines (2, differential pair):</strong> <code>CAN_H</code>, <code>CAN_L</code>.</p>
-
-      <p><strong>Differential signaling</strong>: instead of measuring one wire against ground (which picks up noise easily), a receiver measures the <em>voltage difference</em> between CAN_H and CAN_L. Electrical noise affects both wires equally (common-mode) and cancels out in the difference — exactly why CAN was designed for automotive environments full of motor and ignition noise.</p>
-
-      <p><strong>Dominant vs Recessive bits</strong> — the mechanism behind master-less arbitration:</p>
-      <ul>
-        <li><strong>Recessive (logical 1)</strong>: CAN_H and CAN_L sit close together (~2.5V both) — a "weak" state.</li>
-        <li><strong>Dominant (logical 0)</strong>: CAN_H driven high, CAN_L driven low, creating a clear voltage difference — a "strong" state that physically <strong>overrides</strong> a recessive bit if both are driven simultaneously.</li>
-      </ul>
-
-      <p><strong>Frame arbitration</strong>: every node with a message ready starts transmitting its message <strong>identifier</strong> bit-by-bit simultaneously with any other waiting node, while also listening to the bus. If a node sends a recessive (1) bit but reads back dominant (0) — because a lower, higher-priority identifier is also transmitting — it knows it lost arbitration and immediately stops, letting the higher-priority message through uninterrupted, with zero collision and zero retransmission delay. <strong>Lower numerical identifier = higher priority</strong> — a deliberate design choice baked into the bit encoding.</p>
-
-      <pre><code> CAN Bus Arbitration — 3 nodes transmitting overlapping IDs simultaneously
-
- Node A ID:  1 0 1 1 0 ...   (loses at bit 3: sends 1, bus reads 0 → backs off)
- Node B ID:  1 0 0 1 1 ...   (WINS — sent all dominant/recessive bits cleanly)
- Node C ID:  1 1 0 0 1 ...   (loses at bit 2: sends 1, bus reads 0 → backs off)
-
- Bus value:  1 0 0 1 1 ...   (dominant "0" always wins on a shared bus)
-                 ^
-          Node A and C both see their bit didn't match the bus —
-          they immediately stop transmitting; Node B continues uninterrupted.</code></pre>
-
-      <p><strong>Error checking</strong>: CAN has by far the most robust built-in error detection of the four — a 15-bit <strong>CRC</strong> per frame, plus <strong>bit-stuffing</strong> (a bit of opposite polarity auto-inserted after 5 identical bits, to keep receivers synchronized), plus real-time error mechanisms (bit monitoring, ACK checking, form-checking) that can flag a faulty node and force it into a "bus-off" state, protecting the rest of the network. This is why CAN is standard for safety-critical automotive/industrial systems — SPI and I2C have no equivalent self-protection.</p>
-
-      <h3>4.5 Quick Comparison</h3>
-      <table>
-        <tr><th>Protocol</th><th>Wires</th><th>Duplex</th><th>Max Speed (typical)</th><th>Addressing</th><th>Built-in Error Checking</th></tr>
-        <tr><td>UART</td><td>2 (+GND)</td><td>Full</td><td>~few Mbps</td><td>None (point-to-point)</td><td>Parity bit only (weak)</td></tr>
-        <tr><td>SPI</td><td>4 (+N×CS)</td><td>Full</td><td>10s of MHz</td><td>Via separate CS pins</td><td>None</td></tr>
-        <tr><td>I2C</td><td>2 (+GND)</td><td>Half</td><td>Up to 3.4 MHz</td><td>7/10-bit addresses</td><td>ACK/NACK only</td></tr>
-        <tr><td>CAN</td><td>2 (+GND)</td><td>Half</td><td>~1 Mbps (Classic)</td><td>Message-ID based</td><td>15-bit CRC + bit-stuffing (strongest)</td></tr>
-      </table>
-
-      <div class="nextlink">Say <strong>"next"</strong> to continue to Section 5: Real-Time Operating Systems (RTOS) — task states, context switching, mutexes/semaphores, priority inversion, and embedded Linux fundamentals.</div>
-    </section>
 
   </main>
 </div>
-
-<footer>Hardware Systems Mastery Vault — built section by section · more chapters landing soon</footer>
-
 <script>
   document.addEventListener('DOMContentLoaded', function () {
     if (window.renderMathInElement) {
@@ -930,14 +315,7 @@ int main(void) {
         ]
       });
     }
-    // close sidebar on nav click (mobile)
-    document.querySelectorAll('nav.toc a:not(.pending)').forEach(function(a){
-      a.addEventListener('click', function(){
-        document.getElementById('sidebar').classList.remove('open');
-      });
-    });
   });
 </script>
-
 </body>
 </html>
